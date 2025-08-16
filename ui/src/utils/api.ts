@@ -161,6 +161,18 @@ class LocalStripeAPI {
     });
   }
 
+  // Webhook logs
+  async getWebhookLogs(limit = 50, offset = 0) {
+    return this.request(`/_config/webhook_logs?limit=${limit}&offset=${offset}`);
+  }
+
+  async retryWebhook(logId: string) {
+    return this.request(`/_config/webhook_logs/${logId}/retry`, {
+      method: 'POST',
+    });
+  }
+
+
   // Data management
   async flushData() {
     return this.request('/_config/data', {

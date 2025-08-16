@@ -29,7 +29,7 @@ from .resources import BalanceTransaction, Charge, Coupon, Customer, Event, \
     Product, Refund, SetupIntent, Source, Subscription, SubscriptionItem, \
     TaxRate, Token, extra_apis, store
 from .errors import UserError
-from .webhooks import register_webhook
+from .webhooks import register_webhook, _webhook_logs, _send_webhook
 
 
 def json_response(*args, **kwargs):
@@ -316,6 +316,72 @@ async def flush_store(request):
     return web.Response()
 
 
+async def get_webhook_logs(request):
+    """Retrieve webhook delivery logs"""
+    data = unflatten_data(request.query)
+    limit = int(data.get('limit', 50))
+    offset = int(data.get('offset', 0))
+    
+    # Sort logs by creation time (newest first)
+    sorted_logs = sorted(_webhook_logs, key=lambda x: x.created, reverse=True)
+    
+    # Apply pagination
+    paginated_logs = sorted_logs[offset:offset + limit]
+    
+    # Convert to dict format
+    logs_data = [log.to_dict() for log in paginated_logs]
+    
+    return json_response({
+        'object': 'list',
+        'data': logs_data,
+        'has_more': len(sorted_logs) > offset + limit,
+        'total_count': len(sorted_logs)
+    })
+
+
+async def get_webhooks_config(request):
+    """Retrieve webhook configurations"""
+    from .webhooks import _webhooks
+    return json_response(_webhooks)
+
+
+async def delete_webhook_config(request):
+    """Delete a webhook configuration"""
+    webhook_id = request.match_info['id']
+    from .webhooks import _webhooks
+    
+    if webhook_id in _webhooks:
+        del _webhooks[webhook_id]
+        return web.Response()
+    else:
+        raise UserError(404, 'Webhook not found')
+
+
+async def retry_webhook(request):
+    """Retry a failed webhook delivery"""
+    log_id = request.match_info['log_id']
+    
+    # Find the webhook log
+    webhook_log = None
+    for log in _webhook_logs:
+        if log.id == log_id:
+            webhook_log = log
+            break
+    
+    if not webhook_log:
+        raise UserError(404, 'Webhook log not found')
+    
+    # Find the original event to retry
+    try:
+        event = Event._api_retrieve(webhook_log.event_id)
+        # Schedule a new webhook delivery
+        from .webhooks import schedule_webhook
+        schedule_webhook(event)
+        return web.Response()
+    except Exception as e:
+        raise UserError(400, f'Failed to retry webhook: {str(e)}')
+
+
 # Static file serving for UI
 def setup_static_routes():
     static_path = os.environ.get('LOCALSTRIPE_STATIC_PATH')
@@ -326,6 +392,10 @@ def setup_static_routes():
 
 
 app.router.add_post('/_config/webhooks/{id}', config_webhook)
+app.router.add_get('/_config/webhooks', get_webhooks_config)
+app.router.add_delete('/_config/webhooks/{id}', delete_webhook_config)
+app.router.add_get('/_config/webhook_logs', get_webhook_logs)
+app.router.add_post('/_config/webhook_logs/{log_id}/retry', retry_webhook)
 app.router.add_delete('/_config/data', flush_store)
 
 # Setup static file serving if LOCALSTRIPE_STATIC_PATH is set
