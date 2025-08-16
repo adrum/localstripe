@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import Card, { CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
+import Alert from '@/components/ui/Alert';
+import { FormField, Input, Textarea } from '@/components/ui/FormField';
 import api from '@/utils/api';
 import type { Customer } from '@/types/stripe';
 
@@ -9,6 +11,8 @@ export default function Customers() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [apiError, setApiError] = useState<string>('');
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [newCustomer, setNewCustomer] = useState({
     email: '',
     name: '',
@@ -31,8 +35,34 @@ export default function Customers() {
     }
   };
 
+  const validateForm = () => {
+    const errors: Record<string, string> = {};
+    
+    if (!newCustomer.email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newCustomer.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+    
+    if (newCustomer.name && newCustomer.name.trim().length < 2) {
+      errors.name = 'Name must be at least 2 characters long';
+    }
+    
+    if (newCustomer.description && newCustomer.description.trim().length > 500) {
+      errors.description = 'Description must be less than 500 characters';
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const createCustomer = async () => {
-    if (!newCustomer.email) return;
+    setApiError('');
+    setValidationErrors({});
+    
+    if (!validateForm()) {
+      return;
+    }
     
     setIsCreating(true);
     try {
@@ -40,8 +70,12 @@ export default function Customers() {
       setNewCustomer({ email: '', name: '', description: '' });
       setShowCreateForm(false);
       await loadCustomers();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create customer:', error);
+      setApiError(
+        error?.message || 
+        'Failed to create customer. Please check your input and try again.'
+      );
     } finally {
       setIsCreating(false);
     }
@@ -53,9 +87,26 @@ export default function Customers() {
     try {
       await api.deleteCustomer(id);
       await loadCustomers();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete customer:', error);
+      setApiError(
+        error?.message || 
+        'Failed to delete customer. Please try again.'
+      );
     }
+  };
+
+  const resetForm = () => {
+    setNewCustomer({ email: '', name: '', description: '' });
+    setValidationErrors({});
+    setApiError('');
+  };
+
+  const handleFormToggle = () => {
+    if (showCreateForm) {
+      resetForm();
+    }
+    setShowCreateForm(!showCreateForm);
   };
 
   const formatDate = (timestamp: number) => {
@@ -72,7 +123,7 @@ export default function Customers() {
             Manage your LocalStripe customers
           </p>
         </div>
-        <Button onClick={() => setShowCreateForm(!showCreateForm)}>
+        <Button onClick={handleFormToggle}>
           {showCreateForm ? 'Cancel' : '+ New Customer'}
         </Button>
       </div>
@@ -85,48 +136,57 @@ export default function Customers() {
             <CardDescription>Add a new customer to your LocalStripe instance</CardDescription>
           </CardHeader>
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email *
-              </label>
-              <input
+            {/* API Error Display */}
+            {apiError && (
+              <Alert variant="error" title="Error">
+                {apiError}
+              </Alert>
+            )}
+            
+            <FormField 
+              label="Email" 
+              required 
+              error={validationErrors.email}
+            >
+              <Input
                 type="email"
-                required
                 value={newCustomer.email}
                 onChange={(e) => setNewCustomer(prev => ({ ...prev, email: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                 placeholder="customer@example.com"
+                error={!!validationErrors.email}
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Name
-              </label>
-              <input
+            </FormField>
+            
+            <FormField 
+              label="Name" 
+              error={validationErrors.name}
+            >
+              <Input
                 type="text"
                 value={newCustomer.name}
                 onChange={(e) => setNewCustomer(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                 placeholder="John Doe"
+                error={!!validationErrors.name}
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
-              </label>
-              <textarea
+            </FormField>
+            
+            <FormField 
+              label="Description" 
+              error={validationErrors.description}
+            >
+              <Textarea
                 value={newCustomer.description}
                 onChange={(e) => setNewCustomer(prev => ({ ...prev, description: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                 placeholder="Customer description..."
-                rows={3}
+                error={!!validationErrors.description}
               />
-            </div>
+            </FormField>
+            
             <div className="flex space-x-3">
               <Button onClick={createCustomer} loading={isCreating}>
                 Create Customer
               </Button>
-              <Button variant="outline" onClick={() => setShowCreateForm(false)}>
+              <Button variant="outline" onClick={handleFormToggle}>
                 Cancel
               </Button>
             </div>

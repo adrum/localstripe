@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Card, { CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
+import Alert from '@/components/ui/Alert';
 import api from '@/utils/api';
 
 interface OverviewStats {
@@ -19,6 +20,7 @@ export default function Overview() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
+  const [apiError, setApiError] = useState<string>('');
 
   useEffect(() => {
     loadStats();
@@ -64,11 +66,16 @@ export default function Overview() {
       return;
     }
 
+    setApiError('');
     try {
       await api.flushData();
       await loadStats(); // Reload stats after flushing
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to flush data:', error);
+      setApiError(
+        error?.message || 
+        'Failed to flush data. Please try again.'
+      );
     }
   };
 
@@ -97,6 +104,13 @@ export default function Overview() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* API Error Display */}
+      {apiError && (
+        <Alert variant="error" title="API Error">
+          {apiError}
+        </Alert>
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>

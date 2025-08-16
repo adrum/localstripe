@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import Card, { CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
+import Alert from '@/components/ui/Alert';
+import { FormField, Input, Select } from '@/components/ui/FormField';
 import api from '@/utils/api';
 import type { Plan } from '@/types/stripe';
 
@@ -9,6 +11,8 @@ export default function Plans() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [apiError, setApiError] = useState<string>('');
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [newPlan, setNewPlan] = useState({
     id: '',
     name: '',
@@ -34,32 +38,91 @@ export default function Plans() {
     }
   };
 
+  const validateForm = () => {
+    const errors: Record<string, string> = {};
+    
+    if (!newPlan.id.trim()) {
+      errors.id = 'Plan ID is required';
+    } else if (!/^[a-zA-Z0-9_-]+$/.test(newPlan.id)) {
+      errors.id = 'Plan ID can only contain letters, numbers, hyphens, and underscores';
+    } else if (plans.some(plan => plan.id === newPlan.id)) {
+      errors.id = 'Plan ID already exists';
+    }
+    
+    if (!newPlan.name.trim()) {
+      errors.name = 'Plan name is required';
+    } else if (newPlan.name.trim().length < 2) {
+      errors.name = 'Plan name must be at least 2 characters long';
+    }
+    
+    if (!newPlan.amount.trim()) {
+      errors.amount = 'Amount is required';
+    } else {
+      const amount = parseFloat(newPlan.amount);
+      if (isNaN(amount) || amount <= 0) {
+        errors.amount = 'Amount must be a positive number';
+      } else if (amount > 99999999.99) {
+        errors.amount = 'Amount cannot exceed $99,999,999.99';
+      }
+    }
+    
+    const intervalCount = parseInt(newPlan.interval_count);
+    if (isNaN(intervalCount) || intervalCount < 1 || intervalCount > 365) {
+      errors.interval_count = 'Interval count must be between 1 and 365';
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const createPlan = async () => {
-    if (!newPlan.id || !newPlan.name || !newPlan.amount) return;
+    setApiError('');
+    setValidationErrors({});
+    
+    if (!validateForm()) {
+      return;
+    }
     
     setIsCreating(true);
     try {
       const planData = {
         ...newPlan,
-        amount: parseInt(newPlan.amount) * 100, // Convert to cents
+        amount: Math.round(parseFloat(newPlan.amount) * 100), // Convert to cents
         interval_count: parseInt(newPlan.interval_count),
       };
       await api.createPlan(planData);
-      setNewPlan({
-        id: '',
-        name: '',
-        amount: '',
-        currency: 'usd',
-        interval: 'month',
-        interval_count: '1',
-      });
+      resetForm();
       setShowCreateForm(false);
       await loadPlans();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create plan:', error);
+      setApiError(
+        error?.message || 
+        'Failed to create plan. Please check your input and try again.'
+      );
     } finally {
       setIsCreating(false);
     }
+  };
+
+  const resetForm = () => {
+    setNewPlan({
+      id: '',
+      name: '',
+      amount: '',
+      currency: 'usd',
+      interval: 'month',
+      interval_count: '1',
+    });
+    setValidationErrors({});
+    setApiError('');
+  };
+
+  const handleFormToggle = () => {
+    if (showCreateForm) {
+      resetForm();
+    }
+    setShowCreateForm(!showCreateForm);
   };
 
   const formatDate = (timestamp: number) => {
@@ -83,7 +146,7 @@ export default function Plans() {
             Manage subscription plans and pricing
           </p>
         </div>
-        <Button onClick={() => setShowCreateForm(!showCreateForm)}>
+        <Button onClick={handleFormToggle}>
           {showCreateForm ? 'Cancel' : '+ New Plan'}
         </Button>
       </div>
@@ -96,84 +159,94 @@ export default function Plans() {
             <CardDescription>Add a new subscription plan</CardDescription>
           </CardHeader>
           <div className="space-y-4">
+            {/* API Error Display */}
+            {apiError && (
+              <Alert variant="error" title="Error">
+                {apiError}
+              </Alert>
+            )}
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Plan ID *
-                </label>
-                <input
+              <FormField 
+                label="Plan ID" 
+                required 
+                error={validationErrors.id}
+              >
+                <Input
                   type="text"
-                  required
                   value={newPlan.id}
                   onChange={(e) => setNewPlan(prev => ({ ...prev, id: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="pro-monthly"
+                  error={!!validationErrors.id}
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Plan Name *
-                </label>
-                <input
+              </FormField>
+              
+              <FormField 
+                label="Plan Name" 
+                required 
+                error={validationErrors.name}
+              >
+                <Input
                   type="text"
-                  required
                   value={newPlan.name}
                   onChange={(e) => setNewPlan(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="Pro Monthly"
+                  error={!!validationErrors.name}
                 />
-              </div>
+              </FormField>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Amount (USD) *
-                </label>
-                <input
+              <FormField 
+                label="Amount (USD)" 
+                required 
+                error={validationErrors.amount}
+              >
+                <Input
                   type="number"
-                  required
                   value={newPlan.amount}
                   onChange={(e) => setNewPlan(prev => ({ ...prev, amount: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="9.99"
                   step="0.01"
+                  min="0"
+                  error={!!validationErrors.amount}
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Interval
-                </label>
-                <select
+              </FormField>
+              
+              <FormField 
+                label="Interval"
+              >
+                <Select
                   value={newPlan.interval}
                   onChange={(e) => setNewPlan(prev => ({ ...prev, interval: e.target.value as any }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
                   <option value="day">Day</option>
                   <option value="week">Week</option>
                   <option value="month">Month</option>
                   <option value="year">Year</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Interval Count
-                </label>
-                <input
+                </Select>
+              </FormField>
+              
+              <FormField 
+                label="Interval Count" 
+                error={validationErrors.interval_count}
+              >
+                <Input
                   type="number"
                   value={newPlan.interval_count}
                   onChange={(e) => setNewPlan(prev => ({ ...prev, interval_count: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                   min="1"
+                  max="365"
+                  error={!!validationErrors.interval_count}
                 />
-              </div>
+              </FormField>
             </div>
             
             <div className="flex space-x-3">
               <Button onClick={createPlan} loading={isCreating}>
                 Create Plan
               </Button>
-              <Button variant="outline" onClick={() => setShowCreateForm(false)}>
+              <Button variant="outline" onClick={handleFormToggle}>
                 Cancel
               </Button>
             </div>
