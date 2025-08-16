@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import Card, { CardHeader, CardTitle, CardDescription } from '../ui/Card';
-import Button from '../ui/Button';
-import api from '../../utils/api';
+import Card, { CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
+import api from '@/utils/api';
 
 interface OverviewStats {
   customers: number;

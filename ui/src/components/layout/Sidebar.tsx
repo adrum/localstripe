@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLocation, Link } from 'react-router-dom';
 
 interface SidebarProps {
   className?: string;
@@ -21,7 +21,7 @@ const configItems = [
 ];
 
 export default function Sidebar({ className = '' }: SidebarProps) {
-  const [activeItem, setActiveItem] = useState('overview');
+  const location = useLocation();
 
   return (
     <div className={`w-64 h-screen bg-white border-r border-gray-200 flex flex-col ${className}`}>
@@ -41,20 +41,23 @@ export default function Sidebar({ className = '' }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-1">
         <div className="space-y-1">
-          {navigationItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveItem(item.id)}
-              className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                activeItem === item.id
-                  ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                  : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-              }`}
-            >
-              <span className="mr-3 text-base">{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
+          {navigationItems.map((item) => {
+            const isActive = location.pathname === item.href;
+            return (
+              <Link
+                key={item.id}
+                to={item.href}
+                className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  isActive
+                    ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                }`}
+              >
+                <span className="mr-3 text-base">{item.icon}</span>
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
 
         {/* Divider */}
@@ -65,20 +68,23 @@ export default function Sidebar({ className = '' }: SidebarProps) {
           <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
             Configuration
           </h3>
-          {configItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveItem(item.id)}
-              className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                activeItem === item.id
-                  ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                  : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-              }`}
-            >
-              <span className="mr-3 text-base">{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
+          {configItems.map((item) => {
+            const isActive = location.pathname === item.href;
+            return (
+              <Link
+                key={item.id}
+                to={item.href}
+                className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  isActive
+                    ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                }`}
+              >
+                <span className="mr-3 text-base">{item.icon}</span>
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
       </nav>
 
