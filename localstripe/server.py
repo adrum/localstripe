@@ -17,6 +17,7 @@ import argparse
 import base64
 import json
 import logging
+import os
 import os.path
 import re
 import socket
@@ -315,8 +316,20 @@ async def flush_store(request):
     return web.Response()
 
 
+# Static file serving for UI
+def setup_static_routes():
+    static_path = os.environ.get('LOCALSTRIPE_STATIC_PATH')
+    if static_path and os.path.exists(static_path):
+        # Serve static files from the specified directory
+        app.router.add_static('/', static_path, name='static')
+        print(f"Serving static files from: {static_path}")
+
+
 app.router.add_post('/_config/webhooks/{id}', config_webhook)
 app.router.add_delete('/_config/data', flush_store)
+
+# Setup static file serving if LOCALSTRIPE_STATIC_PATH is set
+setup_static_routes()
 
 
 def start():
