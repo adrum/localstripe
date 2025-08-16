@@ -4,6 +4,9 @@ import Overview from '@/components/dashboard/Overview';
 import Customers from '@/components/dashboard/Customers';
 import Subscriptions from '@/components/dashboard/Subscriptions';
 import Plans from '@/components/dashboard/Plans';
+import Payments from '@/components/dashboard/Payments';
+import Charges from '@/components/dashboard/Charges';
+import Webhooks from '@/components/dashboard/Webhooks';
 
 // Page titles and subtitles for each route
 const pageInfo: Record<string, { title: string; subtitle: string }> = {
@@ -76,9 +79,9 @@ function AppContent() {
             <Route path="/customers" element={<Customers />} />
             <Route path="/subscriptions" element={<Subscriptions />} />
             <Route path="/plans" element={<Plans />} />
-            <Route path="/payments" element={<PlaceholderPage name="Payments" />} />
-            <Route path="/charges" element={<PlaceholderPage name="Charges" />} />
-            <Route path="/webhooks" element={<PlaceholderPage name="Webhooks" />} />
+            <Route path="/payments" element={<Payments />} />
+            <Route path="/charges" element={<Charges />} />
+            <Route path="/webhooks" element={<Webhooks />} />
             <Route path="/logs" element={<PlaceholderPage name="Logs" />} />
             <Route path="/settings" element={<PlaceholderPage name="Settings" />} />
             <Route path="/api-keys" element={<PlaceholderPage name="API Keys" />} />

@@ -115,6 +115,13 @@ class LocalStripeAPI {
     return this.request(`/v1/charges/${id}`);
   }
 
+  async createCharge(data: Record<string, any>) {
+    return this.request('/v1/charges', {
+      method: 'POST',
+      body: this.formEncode(data),
+    });
+  }
+
   // Payment Intent endpoints
   async getPaymentIntents() {
     return this.request('/v1/payment_intents');
@@ -122,6 +129,13 @@ class LocalStripeAPI {
 
   async getPaymentIntent(id: string) {
     return this.request(`/v1/payment_intents/${id}`);
+  }
+
+  async createPaymentIntent(data: Record<string, any>) {
+    return this.request('/v1/payment_intents', {
+      method: 'POST',
+      body: this.formEncode(data),
+    });
   }
 
   // Webhook configuration
@@ -139,6 +153,12 @@ class LocalStripeAPI {
 
   async getWebhooks() {
     return this.request('/_config/webhooks');
+  }
+
+  async deleteWebhook(name: string) {
+    return this.request(`/_config/webhooks/${name}`, {
+      method: 'DELETE',
+    });
   }
 
   // Data management
