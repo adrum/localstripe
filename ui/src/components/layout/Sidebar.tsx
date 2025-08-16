@@ -26,13 +26,13 @@ export default function Sidebar({ className = '' }: SidebarProps) {
   return (
     <div className={`w-64 h-screen bg-white border-r border-gray-200 flex flex-col ${className}`}>
       {/* Logo/Header */}
-      <div className="p-6 border-b border-gray-200">
+      <div className="px-6 py-4 border-b border-gray-200">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-sm">LS</span>
           </div>
-          <div>
-            <h1 className="text-lg font-semibold text-gray-900">LocalStripe</h1>
+          <div className="flex flex-col gap-1 py-1">
+            <h1 className="text-xl font-semibold text-gray-900">LocalStripe</h1>
             <p className="text-xs text-gray-500">Mock Server Dashboard</p>
           </div>
         </div>
@@ -47,11 +47,10 @@ export default function Sidebar({ className = '' }: SidebarProps) {
               <Link
                 key={item.id}
                 to={item.href}
-                className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-                }`}
+                className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${isActive
+                  ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                  : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                  }`}
               >
                 <span className="mr-3 text-base">{item.icon}</span>
                 {item.label}
@@ -74,11 +73,10 @@ export default function Sidebar({ className = '' }: SidebarProps) {
               <Link
                 key={item.id}
                 to={item.href}
-                className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-                }`}
+                className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${isActive
+                  ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                  : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                  }`}
               >
                 <span className="mr-3 text-base">{item.icon}</span>
                 {item.label}
