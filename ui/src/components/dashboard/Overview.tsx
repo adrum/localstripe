@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState, useMemo } from 'react';
 import Card, { CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
-import api from '@/utils/api';
+import { useCustomers, useSubscriptions, useCharges, useHealthCheck, useFlushData } from '@/hooks/useAPI';
 
 interface OverviewStats {
   customers: number;
@@ -12,54 +12,36 @@ interface OverviewStats {
 }
 
 export default function Overview() {
-  const [stats, setStats] = useState<OverviewStats>({
-    customers: 0,
-    subscriptions: 0,
-    charges: 0,
-    revenue: 0,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [isConnected, setIsConnected] = useState(false);
   const [apiError, setApiError] = useState<string>('');
 
-  useEffect(() => {
-    loadStats();
-  }, []);
+  // TanStack Query hooks
+  const { data: healthData, isLoading: isHealthLoading } = useHealthCheck();
+  const { data: customersData, isLoading: isCustomersLoading } = useCustomers();
+  const { data: subscriptionsData, isLoading: isSubscriptionsLoading } = useSubscriptions();
+  const { data: chargesData, isLoading: isChargesLoading } = useCharges();
+  const flushDataMutation = useFlushData();
 
-  const loadStats = async () => {
-    setIsLoading(true);
-    try {
-      // Check connection first
-      const health = await api.healthCheck();
-      setIsConnected(health.status === 'connected');
+  const isConnected = healthData?.status === 'connected';
+  const isLoading = isHealthLoading || isCustomersLoading || isSubscriptionsLoading || isChargesLoading;
 
-      if (health.status === 'connected') {
-        // Load data in parallel
-        const [customers, subscriptions, charges] = await Promise.all([
-          api.getCustomers().catch(() => ({ data: [] })),
-          api.getSubscriptions().catch(() => ({ data: [] })),
-          api.getCharges().catch(() => ({ data: [] })),
-        ]);
+  // Calculate stats from data
+  const stats = useMemo(() => {
+    const customers = customersData?.data?.length || 0;
+    const subscriptions = subscriptionsData?.data?.length || 0;
+    const charges = chargesData?.data?.length || 0;
+    
+    // Calculate revenue from charges
+    const chargesArray = chargesData?.data || [];
+    const revenue = chargesArray.reduce((sum: number, charge: any) => 
+      sum + (charge.paid ? charge.amount / 100 : 0), 0) || 0;
 
-        // Calculate revenue from charges
-        const chargesData = (charges as any)?.data || [];
-        const revenue = chargesData.reduce((sum: number, charge: any) => 
-          sum + (charge.paid ? charge.amount / 100 : 0), 0) || 0;
-
-        setStats({
-          customers: (customers as any)?.data?.length || 0,
-          subscriptions: (subscriptions as any)?.data?.length || 0,
-          charges: chargesData.length || 0,
-          revenue,
-        });
-      }
-    } catch (error) {
-      console.error('Failed to load stats:', error);
-      setIsConnected(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    return {
+      customers,
+      subscriptions,
+      charges,
+      revenue,
+    };
+  }, [customersData, subscriptionsData, chargesData]);
 
   const flushData = async () => {
     if (!confirm('Are you sure you want to flush all data? This action cannot be undone.')) {
@@ -68,8 +50,8 @@ export default function Overview() {
 
     setApiError('');
     try {
-      await api.flushData();
-      await loadStats(); // Reload stats after flushing
+      await flushDataMutation.mutateAsync();
+      // Data will automatically refresh due to query invalidation in the hook
     } catch (error: any) {
       console.error('Failed to flush data:', error);
       setApiError(
@@ -93,7 +75,7 @@ export default function Overview() {
             <p className="text-gray-600 mb-4">
               Make sure the LocalStripe server is running on port 8420
             </p>
-            <Button onClick={loadStats}>
+            <Button onClick={() => window.location.reload()}>
               Retry Connection
             </Button>
           </div>
@@ -179,10 +161,10 @@ export default function Overview() {
           </CardDescription>
         </CardHeader>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Button variant="outline" onClick={loadStats} loading={isLoading}>
+          <Button variant="outline" onClick={() => window.location.reload()} loading={isLoading}>
             🔄 Refresh Data
           </Button>
-          <Button variant="danger" onClick={flushData}>
+          <Button variant="danger" onClick={flushData} loading={flushDataMutation.isPending}>
             🗑️ Flush All Data
           </Button>
           <Button variant="secondary" onClick={() => window.open('http://localhost:8420/v1/customers', '_blank')}>

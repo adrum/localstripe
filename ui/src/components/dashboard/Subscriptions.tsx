@@ -1,28 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Card, { CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import api from '@/utils/api';
+import { useSubscriptions } from '@/hooks/useAPI';
 import type { Subscription } from '@/types/stripe';
 
 export default function Subscriptions() {
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    loadSubscriptions();
-  }, []);
-
-  const loadSubscriptions = async () => {
-    setIsLoading(true);
-    try {
-      const response = await api.getSubscriptions();
-      setSubscriptions((response as any)?.data || []);
-    } catch (error) {
-      console.error('Failed to load subscriptions:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // TanStack Query hooks
+  const { data: subscriptionsData, isLoading, refetch } = useSubscriptions();
+  
+  const subscriptions: Subscription[] = subscriptionsData?.data || [];
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleDateString();
@@ -53,7 +39,7 @@ export default function Subscriptions() {
             Monitor active and past subscriptions
           </p>
         </div>
-        <Button variant="outline" onClick={loadSubscriptions} loading={isLoading}>
+        <Button variant="outline" onClick={() => refetch()} loading={isLoading}>
           Refresh
         </Button>
       </div>

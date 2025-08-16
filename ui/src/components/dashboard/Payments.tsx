@@ -1,15 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Card, { CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
 import { FormField, Input, Select } from '@/components/ui/FormField';
-import api from '@/utils/api';
+import { usePaymentIntents, useCreatePaymentIntent } from '@/hooks/useAPI';
 import type { PaymentIntent } from '@/types/stripe';
 
 export default function Payments() {
-  const [paymentIntents, setPaymentIntents] = useState<PaymentIntent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isCreating, setIsCreating] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [apiError, setApiError] = useState<string>('');
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -20,21 +17,11 @@ export default function Payments() {
     description: '',
   });
 
-  useEffect(() => {
-    loadPaymentIntents();
-  }, []);
-
-  const loadPaymentIntents = async () => {
-    setIsLoading(true);
-    try {
-      const response = await api.getPaymentIntents();
-      setPaymentIntents((response as any)?.data || []);
-    } catch (error) {
-      console.error('Failed to load payment intents:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // TanStack Query hooks
+  const { data: paymentIntentsData, isLoading, refetch } = usePaymentIntents();
+  const createPaymentIntentMutation = useCreatePaymentIntent();
+  
+  const paymentIntents: PaymentIntent[] = paymentIntentsData?.data || [];
 
   const validateForm = () => {
     const errors: Record<string, string> = {};
@@ -68,7 +55,6 @@ export default function Payments() {
       return;
     }
     
-    setIsCreating(true);
     try {
       const paymentData = {
         ...newPaymentIntent,
@@ -83,18 +69,15 @@ export default function Payments() {
         delete (paymentData as any).description;
       }
       
-      await api.createPaymentIntent(paymentData);
+      await createPaymentIntentMutation.mutateAsync(paymentData);
       resetForm();
       setShowCreateForm(false);
-      await loadPaymentIntents();
     } catch (error: any) {
       console.error('Failed to create payment intent:', error);
       setApiError(
         error?.message || 
         'Failed to create payment intent. Please check your input and try again.'
       );
-    } finally {
-      setIsCreating(false);
     }
   };
 
@@ -233,7 +216,7 @@ export default function Payments() {
             </FormField>
             
             <div className="flex space-x-3">
-              <Button onClick={createPaymentIntent} loading={isCreating}>
+              <Button onClick={createPaymentIntent} loading={createPaymentIntentMutation.isPending}>
                 Create Payment Intent
               </Button>
               <Button variant="outline" onClick={handleFormToggle}>
@@ -254,7 +237,7 @@ export default function Payments() {
                 {isLoading ? 'Loading...' : `${paymentIntents.length} payment intent${paymentIntents.length !== 1 ? 's' : ''} total`}
               </CardDescription>
             </div>
-            <Button variant="outline" onClick={loadPaymentIntents} loading={isLoading}>
+            <Button variant="outline" onClick={() => refetch()} loading={isLoading}>
               Refresh
             </Button>
           </div>

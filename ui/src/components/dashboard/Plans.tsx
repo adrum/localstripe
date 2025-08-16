@@ -1,15 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Card, { CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
 import { FormField, Input, Select } from '@/components/ui/FormField';
-import api from '@/utils/api';
+import { usePlans, useCreatePlan } from '@/hooks/useAPI';
 import type { Plan } from '@/types/stripe';
 
 export default function Plans() {
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isCreating, setIsCreating] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [apiError, setApiError] = useState<string>('');
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -22,21 +19,11 @@ export default function Plans() {
     interval_count: '1',
   });
 
-  useEffect(() => {
-    loadPlans();
-  }, []);
-
-  const loadPlans = async () => {
-    setIsLoading(true);
-    try {
-      const response = await api.getPlans();
-      setPlans((response as any)?.data || []);
-    } catch (error) {
-      console.error('Failed to load plans:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // TanStack Query hooks
+  const { data: plansData, isLoading, refetch } = usePlans();
+  const createPlanMutation = useCreatePlan();
+  
+  const plans: Plan[] = plansData?.data || [];
 
   const validateForm = () => {
     const errors: Record<string, string> = {};
@@ -83,25 +70,21 @@ export default function Plans() {
       return;
     }
     
-    setIsCreating(true);
     try {
       const planData = {
         ...newPlan,
         amount: Math.round(parseFloat(newPlan.amount) * 100), // Convert to cents
         interval_count: parseInt(newPlan.interval_count),
       };
-      await api.createPlan(planData);
+      await createPlanMutation.mutateAsync(planData);
       resetForm();
       setShowCreateForm(false);
-      await loadPlans();
     } catch (error: any) {
       console.error('Failed to create plan:', error);
       setApiError(
         error?.message || 
         'Failed to create plan. Please check your input and try again.'
       );
-    } finally {
-      setIsCreating(false);
     }
   };
 
@@ -243,7 +226,7 @@ export default function Plans() {
             </div>
             
             <div className="flex space-x-3">
-              <Button onClick={createPlan} loading={isCreating}>
+              <Button onClick={createPlan} loading={createPlanMutation.isPending}>
                 Create Plan
               </Button>
               <Button variant="outline" onClick={handleFormToggle}>
@@ -264,7 +247,7 @@ export default function Plans() {
                 {isLoading ? 'Loading...' : `${plans.length} plan${plans.length !== 1 ? 's' : ''} total`}
               </CardDescription>
             </div>
-            <Button variant="outline" onClick={loadPlans} loading={isLoading}>
+            <Button variant="outline" onClick={() => refetch()} loading={isLoading}>
               Refresh
             </Button>
           </div>

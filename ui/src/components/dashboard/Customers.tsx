@@ -1,15 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Card, { CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
 import { FormField, Input, Textarea } from '@/components/ui/FormField';
-import api from '@/utils/api';
+import { useCustomers, useCreateCustomer, useDeleteCustomer } from '@/hooks/useAPI';
 import type { Customer } from '@/types/stripe';
 
 export default function Customers() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isCreating, setIsCreating] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [apiError, setApiError] = useState<string>('');
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -19,21 +16,12 @@ export default function Customers() {
     description: '',
   });
 
-  useEffect(() => {
-    loadCustomers();
-  }, []);
+  // TanStack Query hooks
+  const { data: customersData, isLoading, refetch } = useCustomers();
+  const createCustomerMutation = useCreateCustomer();
+  const deleteCustomerMutation = useDeleteCustomer();
 
-  const loadCustomers = async () => {
-    setIsLoading(true);
-    try {
-      const response = await api.getCustomers();
-      setCustomers((response as any)?.data || []);
-    } catch (error) {
-      console.error('Failed to load customers:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const customers: Customer[] = customersData?.data || [];
 
   const validateForm = () => {
     const errors: Record<string, string> = {};
@@ -64,29 +52,25 @@ export default function Customers() {
       return;
     }
     
-    setIsCreating(true);
     try {
-      await api.createCustomer(newCustomer);
+      await createCustomerMutation.mutateAsync(newCustomer);
       setNewCustomer({ email: '', name: '', description: '' });
       setShowCreateForm(false);
-      await loadCustomers();
     } catch (error: any) {
       console.error('Failed to create customer:', error);
       setApiError(
         error?.message || 
         'Failed to create customer. Please check your input and try again.'
       );
-    } finally {
-      setIsCreating(false);
     }
   };
 
   const deleteCustomer = async (id: string) => {
     if (!confirm('Are you sure you want to delete this customer?')) return;
     
+    setApiError('');
     try {
-      await api.deleteCustomer(id);
-      await loadCustomers();
+      await deleteCustomerMutation.mutateAsync(id);
     } catch (error: any) {
       console.error('Failed to delete customer:', error);
       setApiError(
@@ -183,7 +167,7 @@ export default function Customers() {
             </FormField>
             
             <div className="flex space-x-3">
-              <Button onClick={createCustomer} loading={isCreating}>
+              <Button onClick={createCustomer} loading={createCustomerMutation.isPending}>
                 Create Customer
               </Button>
               <Button variant="outline" onClick={handleFormToggle}>
@@ -204,7 +188,7 @@ export default function Customers() {
                 {isLoading ? 'Loading...' : `${customers.length} customer${customers.length !== 1 ? 's' : ''} total`}
               </CardDescription>
             </div>
-            <Button variant="outline" onClick={loadCustomers} loading={isLoading}>
+            <Button variant="outline" onClick={() => refetch()} loading={isLoading}>
               Refresh
             </Button>
           </div>
