@@ -4,7 +4,14 @@ import Card, { CardHeader, CardTitle, CardDescription } from '@/components/ui/Ca
 import Button from '@/components/ui/Button';
 import { Select } from '@/components/ui/FormField';
 import CodeBlock from '@/components/ui/CodeBlock';
+import StackTrace from '@/components/ui/StackTrace';
 import { useAPILogs, useClearAPILogs } from '@/hooks/useAPI';
+
+interface APILogError {
+  message?: string;
+  type?: string;
+  traceback?: string;
+}
 
 interface APILog {
   id: string;
@@ -16,7 +23,7 @@ interface APILog {
   status_code: number;
   duration_ms: number;
   created: number;
-  error: unknown;
+  error: string | APILogError | null;
   object_id: string | null;
   object_type: string | null;
 }
@@ -324,9 +331,25 @@ export default function Logs() {
                         {!!log.error && (
                           <div>
                             <span className="text-gray-600">Error:</span>
-                            <span className="ml-2 text-red-600">
-                              {typeof log.error === 'string' ? log.error as string : (log.error as { message?: string })?.message || 'Error occurred'}
-                            </span>
+                            <div className="ml-2 mt-1">
+                              {typeof log.error === 'string' ? (
+                                <span className="text-red-600">{log.error}</span>
+                              ) : typeof log.error === 'object' && (log.error as APILogError)?.message ? (
+                                <div className="bg-red-50 border border-red-200 rounded p-2">
+                                  <div className="flex items-center text-red-700 font-medium text-sm">
+                                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                    </svg>
+                                    {(log.error as APILogError).type || 'Error'}
+                                  </div>
+                                  <div className="text-red-600 text-xs mt-1 font-mono">
+                                    {(log.error as APILogError).message}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-red-600">Error occurred</span>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -370,7 +393,17 @@ export default function Logs() {
                         />
                       )}
                       
-                      {!log.request_body && !log.response_body && (
+                      {!!log.error && typeof log.error === 'object' && (log.error as APILogError)?.traceback && (
+                        <div className="lg:col-span-2">
+                          <StackTrace
+                            trace={typeof (log.error as APILogError).traceback === 'string' ? (log.error as APILogError).traceback! : JSON.stringify((log.error as APILogError).traceback, null, 2)}
+                            title="Error Traceback"
+                            collapsible
+                          />
+                        </div>
+                      )}
+                      
+                      {!log.request_body && !log.response_body && !log.error && (
                         <div className="text-sm text-gray-500">
                           No request or response body data available
                         </div>
