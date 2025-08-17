@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import Sidebar from '@/components/layout/Sidebar';
 import Overview from '@/components/dashboard/Overview';
 import Customers from '@/components/dashboard/Customers';
