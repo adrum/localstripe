@@ -173,6 +173,18 @@ class LocalStripeAPI {
   }
 
 
+  // API Logs
+  async getAPILogs(queryParams = '') {
+    const url = queryParams ? `/_config/api_logs?${queryParams}` : '/_config/api_logs';
+    return this.request(url);
+  }
+
+  async clearAPILogs() {
+    return this.request('/_config/api_logs', {
+      method: 'DELETE',
+    });
+  }
+
   // Data management
   async flushData() {
     return this.request('/_config/data', {

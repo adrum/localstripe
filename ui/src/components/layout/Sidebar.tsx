@@ -12,7 +12,7 @@ const navigationItems = [
   { id: 'payments', label: 'Payments', icon: '💳', href: '/payments' },
   { id: 'charges', label: 'Charges', icon: '⚡', href: '/charges' },
   { id: 'webhooks', label: 'Webhooks', icon: '🔗', href: '/webhooks' },
-  { id: 'logs', label: 'Logs', icon: '📝', href: '/logs' },
+  { id: 'logs', label: 'API Logs', icon: '📜', href: '/logs' },
 ];
 
 const configItems = [

@@ -30,6 +30,7 @@ from .resources import BalanceTransaction, Charge, Coupon, Customer, Event, \
     TaxRate, Token, extra_apis, store
 from .errors import UserError
 from .webhooks import register_webhook, _webhook_logs, _send_webhook
+from .api_logs import create_api_log, get_api_logs, clear_api_logs
 
 
 def json_response(*args, **kwargs):
@@ -200,8 +201,78 @@ async def save_store_middleware(request, handler):
             store.dump_to_disk()
 
 
+@web.middleware
+async def api_logging_middleware(request, handler):
+    """Log all API requests and responses"""
+    # Skip logging for internal config endpoints and static files
+    if (request.path.startswith('/_config/api_logs') or 
+        request.path.startswith('/js.stripe.com/') or
+        request.path == '/' or
+        request.path.endswith(('.js', '.css', '.html', '.svg', '.png', '.jpg'))):
+        return await handler(request)
+    
+    # Get request data
+    query_params = dict(request.query)
+    request_body = None
+    
+    if request.method in ('POST', 'PUT', 'PATCH'):
+        try:
+            request_body = await get_post_data(request, remove_auth=False)
+        except:
+            request_body = None
+    
+    # Create log entry
+    api_log = create_api_log(
+        method=request.method,
+        path=request.path,
+        query_params=query_params,
+        request_body=request_body
+    )
+    
+    try:
+        # Process the request
+        response = await handler(request)
+        
+        # Log successful response
+        if response.status < 400:
+            try:
+                # Try to get response body for successful requests
+                if hasattr(response, 'text'):
+                    response_text = response.text
+                    try:
+                        response_body = json.loads(response_text)
+                    except:
+                        response_body = response_text
+                    api_log.complete_request(response.status, response_body)
+                else:
+                    api_log.complete_request(response.status)
+            except:
+                api_log.complete_request(response.status)
+        else:
+            # Log error response
+            try:
+                if hasattr(response, 'text'):
+                    error_text = response.text
+                    try:
+                        error_body = json.loads(error_text)
+                    except:
+                        error_body = error_text
+                    api_log.complete_request(response.status, error=error_body)
+                else:
+                    api_log.complete_request(response.status)
+            except:
+                api_log.complete_request(response.status)
+        
+        return response
+        
+    except Exception as e:
+        # Log exception
+        api_log.complete_request(500, error=str(e))
+        raise
+
+
 app = web.Application(middlewares=[error_middleware, auth_middleware,
-                                   save_store_middleware])
+                                   api_logging_middleware, save_store_middleware])
 app.on_response_prepare.append(add_cors_headers)
 
 
@@ -382,6 +453,37 @@ async def retry_webhook(request):
         raise UserError(400, f'Failed to retry webhook: {str(e)}')
 
 
+async def get_api_logs_endpoint(request):
+    """Retrieve API logs with optional filtering"""
+    data = unflatten_data(request.query)
+    
+    # Extract query parameters
+    limit = int(data.get('limit', 100))
+    offset = int(data.get('offset', 0))
+    method = data.get('method', None)
+    status_code = int(data.get('status_code')) if 'status_code' in data else None
+    object_type = data.get('object_type', None)
+    object_id = data.get('object_id', None)
+    
+    # Get filtered logs
+    logs = get_api_logs(
+        limit=limit,
+        offset=offset,
+        method=method,
+        status_code=status_code,
+        object_type=object_type,
+        object_id=object_id
+    )
+    
+    return json_response(logs)
+
+
+async def clear_api_logs_endpoint(request):
+    """Clear all API logs"""
+    clear_api_logs()
+    return web.Response()
+
+
 # Static file serving for UI
 def setup_static_routes():
     static_path = os.environ.get('LOCALSTRIPE_STATIC_PATH')
@@ -396,6 +498,8 @@ app.router.add_get('/_config/webhooks', get_webhooks_config)
 app.router.add_delete('/_config/webhooks/{id}', delete_webhook_config)
 app.router.add_get('/_config/webhook_logs', get_webhook_logs)
 app.router.add_post('/_config/webhook_logs/{log_id}/retry', retry_webhook)
+app.router.add_get('/_config/api_logs', get_api_logs_endpoint)
+app.router.add_delete('/_config/api_logs', clear_api_logs_endpoint)
 app.router.add_delete('/_config/data', flush_store)
 
 # Setup static file serving if LOCALSTRIPE_STATIC_PATH is set

@@ -7,48 +7,49 @@ import Plans from '@/components/dashboard/Plans';
 import Payments from '@/components/dashboard/Payments';
 import Charges from '@/components/dashboard/Charges';
 import Webhooks from '@/components/dashboard/Webhooks';
+import Logs from '@/components/dashboard/Logs';
 
 // Page titles and subtitles for each route
 const pageInfo: Record<string, { title: string; subtitle: string }> = {
-  '/': { 
-    title: 'Overview', 
-    subtitle: 'Monitor your LocalStripe mock server activity and data' 
+  '/': {
+    title: 'Overview',
+    subtitle: 'Monitor your LocalStripe mock server activity and data'
   },
-  '/customers': { 
-    title: 'Customers', 
-    subtitle: 'Manage your LocalStripe customers' 
+  '/customers': {
+    title: 'Customers',
+    subtitle: 'Manage your LocalStripe customers'
   },
-  '/subscriptions': { 
-    title: 'Subscriptions', 
-    subtitle: 'Monitor active and past subscriptions' 
+  '/subscriptions': {
+    title: 'Subscriptions',
+    subtitle: 'Monitor active and past subscriptions'
   },
-  '/plans': { 
-    title: 'Plans', 
-    subtitle: 'Manage subscription plans and pricing' 
+  '/plans': {
+    title: 'Plans',
+    subtitle: 'Manage subscription plans and pricing'
   },
-  '/payments': { 
-    title: 'Payments', 
-    subtitle: 'View payment intents and transactions' 
+  '/payments': {
+    title: 'Payments',
+    subtitle: 'View payment intents and transactions'
   },
-  '/charges': { 
-    title: 'Charges', 
-    subtitle: 'Monitor charges and payment activity' 
+  '/charges': {
+    title: 'Charges',
+    subtitle: 'Monitor charges and payment activity'
   },
-  '/webhooks': { 
-    title: 'Webhooks', 
-    subtitle: 'Configure webhook endpoints' 
+  '/webhooks': {
+    title: 'Webhooks',
+    subtitle: 'Configure webhook endpoints'
   },
-  '/logs': { 
-    title: 'Logs', 
-    subtitle: 'View server logs and activity' 
+  '/logs': {
+    title: 'Logs',
+    subtitle: 'Monitor all API requests and responses with detailed logging'
   },
-  '/settings': { 
-    title: 'Settings', 
-    subtitle: 'Configure your LocalStripe instance' 
+  '/settings': {
+    title: 'Settings',
+    subtitle: 'Configure your LocalStripe instance'
   },
-  '/api-keys': { 
-    title: 'API Keys', 
-    subtitle: 'Manage API keys and authentication' 
+  '/api-keys': {
+    title: 'API Keys',
+    subtitle: 'Manage API keys and authentication'
   },
 };
 
@@ -71,7 +72,7 @@ function AppContent() {
             </div>
           </div>
         </div>
-        
+
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
           <Routes>
@@ -82,7 +83,7 @@ function AppContent() {
             <Route path="/payments" element={<Payments />} />
             <Route path="/charges" element={<Charges />} />
             <Route path="/webhooks" element={<Webhooks />} />
-            <Route path="/logs" element={<PlaceholderPage name="Logs" />} />
+            <Route path="/logs" element={<Logs />} />
             <Route path="/settings" element={<PlaceholderPage name="Settings" />} />
             <Route path="/api-keys" element={<PlaceholderPage name="API Keys" />} />
           </Routes>
