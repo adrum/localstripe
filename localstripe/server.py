@@ -26,7 +26,7 @@ from aiohttp import web
 
 from .resources import BalanceTransaction, Charge, Coupon, Customer, Event, \
     Invoice, InvoiceItem, PaymentIntent, PaymentMethod, Payout, Plan, \
-    Product, Refund, SetupIntent, Source, Subscription, SubscriptionItem, \
+    Price,Product, Refund, SetupIntent, Source, Subscription, SubscriptionItem, \
     TaxRate, Token, extra_apis, store
 from .errors import UserError
 from .webhooks import register_webhook, _webhook_logs, _send_webhook
@@ -319,7 +319,7 @@ for method, url, func in extra_apis:
 
 
 for cls in (BalanceTransaction, Charge, Coupon, Customer, Event, Invoice,
-            InvoiceItem, PaymentIntent, PaymentMethod, Payout, Plan, Product,
+            InvoiceItem, PaymentIntent, PaymentMethod, Payout, Plan, Price, Product,
             Refund, SetupIntent, Source, Subscription, SubscriptionItem,
             TaxRate, Token):
     for method, url, func in (

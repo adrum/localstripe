@@ -2629,6 +2629,236 @@ class Product(StripeObject):
         return li
 
 
+class Price(StripeObject):
+    object = 'price'
+    _id_prefix = 'price_'
+
+    def __init__(
+        self,
+        id=None,
+        active=True,
+        currency=None,
+        metadata=None,
+        nickname=None,
+        product=None,
+        tax_behavior=None,
+        type='one_time',
+        unit_amount=None,
+        unit_amount_decimal=None,
+        currency_options=None,
+        custom_unit_amount=None,
+        lookup_key=None,
+        transfer_lookup_key=False,
+        transform_quantity=None,
+        tiers=None,
+        tiers_mode=None,
+        billing_scheme='per_unit',
+        recurring=None,
+        **kwargs,
+    ):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        active = try_convert_to_bool(active)
+        unit_amount = try_convert_to_int(unit_amount)
+        transfer_lookup_key = try_convert_to_bool(transfer_lookup_key)
+
+        try:
+            assert id is None or _type(id) is str and id
+            assert _type(active) is bool
+            assert _type(currency) is str and currency
+            assert _type(product) is str and product
+            if nickname is not None:
+                assert _type(nickname) is str
+            if tax_behavior is not None:
+                assert tax_behavior in ('inclusive', 'exclusive', 'unspecified')
+            assert type in ('one_time', 'recurring')
+            if unit_amount is not None:
+                assert _type(unit_amount) is int and unit_amount >= 0
+            if unit_amount_decimal is not None:
+                assert _type(unit_amount_decimal) is str
+            if currency_options is not None:
+                assert _type(currency_options) is dict
+            if custom_unit_amount is not None:
+                assert _type(custom_unit_amount) is dict
+            if lookup_key is not None:
+                assert _type(lookup_key) is str
+            if transform_quantity is not None:
+                assert _type(transform_quantity) is dict
+            if billing_scheme is not None:
+                assert billing_scheme in ('per_unit', 'tiered')
+            if billing_scheme == 'tiered':
+                assert tiers is not None and _type(tiers) is list
+                assert tiers_mode in ('graduated', 'volume')
+            if type == 'recurring':
+                if recurring is None:
+                    recurring = {'interval': 'month', 'interval_count': 1}
+                assert _type(recurring) is dict
+                assert 'interval' in recurring
+                assert recurring['interval'] in ('day', 'week', 'month', 'year')
+                if 'interval_count' in recurring:
+                    recurring['interval_count'] = try_convert_to_int(
+                        recurring['interval_count']
+                    )
+                    assert (
+                        _type(recurring['interval_count']) is int
+                        and recurring['interval_count'] >= 1
+                    )
+                else:
+                    recurring['interval_count'] = 1
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        # All exceptions must be raised before this point.
+        super().__init__(id)
+
+        self.active = active
+        self.currency = currency
+        self.metadata = metadata or {}
+        self.nickname = nickname
+        self.product = product
+        self.tax_behavior = tax_behavior
+        self.type = type
+        self.unit_amount = unit_amount
+        self.unit_amount_decimal = unit_amount_decimal
+        self.currency_options = currency_options
+        self.custom_unit_amount = custom_unit_amount
+        self.lookup_key = lookup_key
+        self.transfer_lookup_key = transfer_lookup_key
+        self.transform_quantity = transform_quantity
+        self.billing_scheme = billing_scheme
+        self.tiers = tiers
+        self.tiers_mode = tiers_mode
+        self.recurring = recurring
+
+        schedule_webhook(Event('price.created', self))
+
+    @classmethod
+    def _api_list_all(
+        cls,
+        url,
+        active=None,
+        currency=None,
+        product=None,
+        type=None,
+        limit=None,
+        starting_after=None,
+        **kwargs,
+    ):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        active = try_convert_to_bool(active)
+        try:
+            if active is not None:
+                assert _type(active) is bool
+            if currency is not None:
+                assert _type(currency) is str
+            if product is not None:
+                assert _type(product) is str
+            if type is not None:
+                assert type in ('one_time', 'recurring')
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        li = super(Price, cls)._api_list_all(
+            url, limit=limit, starting_after=starting_after
+        )
+
+        if active is not None:
+            li._list = [obj for obj in li._list if obj.active == active]
+        if currency is not None:
+            li._list = [obj for obj in li._list if obj.currency == currency]
+        if product is not None:
+            li._list = [obj for obj in li._list if obj.product == product]
+        if type is not None:
+            li._list = [obj for obj in li._list if obj.type == type]
+
+        return li
+
+    @classmethod
+    def _api_update(cls, id, **data):
+        # Only allow updating certain fields
+        allowed_fields = {
+            'active',
+            'metadata',
+            'nickname',
+            'tax_behavior',
+            'lookup_key',
+            'transfer_lookup_key',
+        }
+        for key in data.keys():
+            if key not in allowed_fields:
+                raise UserError(400, f'Cannot update field: {key}')
+
+        # Convert active to boolean if present
+        if 'active' in data:
+            data['active'] = try_convert_to_bool(data['active'])
+        if 'transfer_lookup_key' in data:
+            data['transfer_lookup_key'] = try_convert_to_bool(
+                data['transfer_lookup_key']
+            )
+
+        return super()._api_update(id, **data)
+
+    @classmethod
+    def _api_search(cls, query=None, limit=None, page=None, **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        limit = try_convert_to_int(limit) or 10
+        page = page or ''
+
+        try:
+            if query is not None:
+                assert _type(query) is str
+            assert _type(limit) is int and 1 <= limit <= 100
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        # Simple search implementation - in a real implementation this would be more sophisticated
+        all_prices = cls._api_list_all('/v1/prices', limit=1000)._list
+
+        if query:
+            # Basic search on nickname, product, and metadata
+            filtered_prices = []
+            for price in all_prices:
+                if (
+                    (price.nickname and query.lower() in price.nickname.lower())
+                    or (price.product and query.lower() in price.product.lower())
+                    or any(
+                        query.lower() in str(v).lower() for v in price.metadata.values()
+                    )
+                ):
+                    filtered_prices.append(price)
+            all_prices = filtered_prices
+
+        # Simple pagination
+        start_idx = 0
+        if page:
+            try:
+                start_idx = int(page) * limit
+            except (ValueError, TypeError):
+                start_idx = 0
+
+        prices = all_prices[start_idx : start_idx + limit]
+
+        # Create a SearchResult as a List object
+        result = List('/v1/prices/search')
+        result.object = 'search_result'
+        result._list = prices
+        result.has_more = len(all_prices) > start_idx + limit
+        result.total_count = len(all_prices)
+
+        if result.has_more:
+            result.next_page = str((start_idx // limit) + 1)
+
+        return result
+
+
+extra_apis.append(('GET', '/v1/prices/search', Price._api_search))
+
+
 class Refund(StripeObject):
     object = 'refund'
     _id_prefix = 're_'
