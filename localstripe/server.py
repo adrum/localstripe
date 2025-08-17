@@ -142,13 +142,14 @@ def get_api_key(request):
     if len(header) != 2:
         return
 
+    api_key = None
     if header[0] == 'Basic':
         api_key = base64.b64decode(header[1].encode('utf-8')).decode('utf-8')
         api_key = api_key.split(':')[0]
     elif header[0] == 'Bearer':
         api_key = header[1]
 
-    if api_key.startswith('sk_') and len(api_key) > 5:
+    if api_key and api_key.startswith('sk_') and len(api_key) > 5:
         return api_key
 
 
