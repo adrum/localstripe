@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Card, { CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
@@ -8,6 +9,7 @@ import type { Customer } from '@/types/stripe';
 
 export default function Customers() {
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string>('');
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [newCustomer, setNewCustomer] = useState({
@@ -15,11 +17,37 @@ export default function Customers() {
     name: '',
     description: '',
   });
+  const [editForm, setEditForm] = useState({
+    email: '',
+    name: '',
+    description: '',
+  });
+
+  const queryClient = useQueryClient();
 
   // TanStack Query hooks
   const { data: customersData, isLoading, refetch } = useCustomers();
   const createCustomerMutation = useCreateCustomer();
   const deleteCustomerMutation = useDeleteCustomer();
+
+  const updateCustomerMutation = useMutation({
+    mutationFn: async ({ customerId, data }: { customerId: string; data: Partial<Customer> }) => {
+      const response = await fetch(`/v1/customers/${customerId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer sk_test_123',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(data as any).toString(),
+      });
+      if (!response.ok) throw new Error('Failed to update customer');
+      return response.json();
+    },
+    onSuccess: () => {
+      setEditingCustomer(null);
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+    },
+  });
 
   const customers: Customer[] = customersData?.data || [];
 
@@ -217,40 +245,118 @@ export default function Customers() {
               <tbody>
                 {customers.map((customer) => (
                   <tr key={customer.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      <div>
-                        <div className="font-medium text-gray-900">
-                          {customer.name || 'Unnamed Customer'}
-                        </div>
-                        <div className="text-sm text-gray-500 font-mono">{customer.id}</div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">
-                      {customer.email || '-'}
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">
-                      {formatDate(customer.created)}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`text-sm ${
-                        customer.account_balance === 0 
-                          ? 'text-gray-600' 
-                          : customer.account_balance > 0 
-                            ? 'text-green-600' 
-                            : 'text-red-600'
-                      }`}>
-                        ${(customer.account_balance / 100).toFixed(2)}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <Button 
-                        variant="danger" 
-                        size="sm"
-                        onClick={() => deleteCustomer(customer.id)}
-                      >
-                        Delete
-                      </Button>
-                    </td>
+                    {editingCustomer === customer.id ? (
+                      <>
+                        <td className="py-3 px-4">
+                          <div>
+                            <FormField label="" error="">
+                              <Input
+                                type="text"
+                                value={editForm.name}
+                                onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                                placeholder="Customer name"
+                              />
+                            </FormField>
+                            <div className="text-sm text-gray-500 font-mono mt-1">{customer.id}</div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <FormField label="" error="">
+                            <Input
+                              type="email"
+                              value={editForm.email}
+                              onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                              placeholder="customer@example.com"
+                            />
+                          </FormField>
+                        </td>
+                        <td className="py-3 px-4 text-gray-600">
+                          {formatDate(customer.created)}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`text-sm ${
+                            customer.account_balance === 0 
+                              ? 'text-gray-600' 
+                              : customer.account_balance > 0 
+                                ? 'text-green-600' 
+                                : 'text-red-600'
+                          }`}>
+                            ${(customer.account_balance / 100).toFixed(2)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right space-x-2">
+                          <Button 
+                            variant="primary" 
+                            size="sm"
+                            onClick={() => updateCustomerMutation.mutate({ 
+                              customerId: customer.id, 
+                              data: editForm 
+                            })}
+                            disabled={updateCustomerMutation.isPending}
+                          >
+                            Save
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => setEditingCustomer(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="py-3 px-4">
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {customer.name || 'Unnamed Customer'}
+                            </div>
+                            <div className="text-sm text-gray-500 font-mono">{customer.id}</div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-gray-600">
+                          {customer.email || '-'}
+                        </td>
+                        <td className="py-3 px-4 text-gray-600">
+                          {formatDate(customer.created)}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`text-sm ${
+                            customer.account_balance === 0 
+                              ? 'text-gray-600' 
+                              : customer.account_balance > 0 
+                                ? 'text-green-600' 
+                                : 'text-red-600'
+                          }`}>
+                            ${(customer.account_balance / 100).toFixed(2)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right space-x-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              setEditingCustomer(customer.id);
+                              setEditForm({
+                                name: customer.name || '',
+                                email: customer.email || '',
+                                description: customer.description || '',
+                              });
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="danger" 
+                            size="sm"
+                            onClick={() => deleteCustomer(customer.id)}
+                          >
+                            Delete
+                          </Button>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>
