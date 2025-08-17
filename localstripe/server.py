@@ -154,10 +154,16 @@ def get_api_key(request):
 
 @web.middleware
 async def auth_middleware(request, handler):
-    if request.path.startswith('/js.stripe.com/'):
-        is_auth = True
-
-    elif request.path.startswith('/_config/'):
+    # Skip authentication for static files and UI routes
+    if (
+        request.path.startswith('/js.stripe.com/')
+        or request.path.startswith('/_config/')
+        or request.path == '/'
+        or request.path.startswith('/assets/')
+        or request.path.endswith(
+            ('.js','.css','.html','.svg','.png','.jpg','.ico','.woff','.woff2','.ttf')
+        )
+    ):
         is_auth = True
 
     else:
@@ -457,15 +463,7 @@ async def clear_api_logs_endpoint(request):
     return web.Response()
 
 
-# Static file serving for UI
-def setup_static_routes():
-    static_path = os.environ.get('LOCALSTRIPE_STATIC_PATH')
-    if static_path and os.path.exists(static_path):
-        # Serve static files from the specified directory
-        app.router.add_static('/', static_path, name='static')
-        print(f"Serving static files from: {static_path}")
-
-
+# Add all API routes first
 app.router.add_post('/_config/webhooks/{id}', config_webhook)
 app.router.add_get('/_config/webhooks', get_webhooks_config)
 app.router.add_delete('/_config/webhooks/{id}', delete_webhook_config)
@@ -475,7 +473,62 @@ app.router.add_get('/_config/api_logs', get_api_logs_endpoint)
 app.router.add_delete('/_config/api_logs', clear_api_logs_endpoint)
 app.router.add_delete('/_config/data', flush_store)
 
-# Setup static file serving if LOCALSTRIPE_STATIC_PATH is set
+
+# Static file serving for UI - must be LAST to avoid conflicts
+def setup_static_routes():
+    static_path = os.environ.get('LOCALSTRIPE_STATIC_PATH')
+    print(f'LOCALSTRIPE_STATIC_PATH: {static_path}')
+
+    if not static_path:
+        print('✗ LOCALSTRIPE_STATIC_PATH not set')
+        return
+
+    if not os.path.exists(static_path):
+        print(f'✗ Static path does not exist: {static_path}')
+        return
+
+    print(f'Static path exists: {static_path}')
+    # List contents of static directory for debugging
+    try:
+        contents = os.listdir(static_path)
+        print(f'Static directory contents: {contents}')
+    except Exception as e:
+        print(f'Error listing static directory: {e}')
+
+    # Add specific route for index.html at root
+    async def serve_index(request):
+        index_path = os.path.join(static_path, 'index.html')
+        if os.path.exists(index_path):
+            return web.FileResponse(index_path)
+        raise web.HTTPNotFound()
+
+    # Add route for root path to serve index.html
+    app.router.add_get('/', serve_index)
+
+    # Add static file serving for all other static assets
+    app.router.add_static('/assets', os.path.join(static_path, 'assets'), name='assets')
+
+    # Add fallback for SPA routing - serve index.html for any unmatched routes
+    async def spa_handler(request):
+        # Only serve index.html for browser requests (not API calls)
+        if (
+            not request.path.startswith('/v1/')
+            and not request.path.startswith('/_config/')
+            and not request.path.startswith('/js.stripe.com/')
+        ):
+            index_path = os.path.join(static_path, 'index.html')
+            if os.path.exists(index_path):
+                return web.FileResponse(index_path)
+        raise web.HTTPNotFound()
+
+    # Add SPA fallback route last
+    app.router.add_route('*', '/{path:.*}', spa_handler)
+
+    print(f'✓ Serving static files from: {static_path}')
+    print('✓ SPA routing enabled for React app')
+
+
+# Setup static file serving AFTER all API routes
 setup_static_routes()
 
 
