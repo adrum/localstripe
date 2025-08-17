@@ -2,6 +2,7 @@ import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-d
 import Sidebar from '@/components/layout/Sidebar';
 import Overview from '@/components/dashboard/Overview';
 import Customers from '@/components/dashboard/Customers';
+import Products from '@/components/dashboard/Products';
 import Subscriptions from '@/components/dashboard/Subscriptions';
 import Plans from '@/components/dashboard/Plans';
 import Payments from '@/components/dashboard/Payments';
@@ -18,6 +19,10 @@ const pageInfo: Record<string, { title: string; subtitle: string }> = {
   '/customers': {
     title: 'Customers',
     subtitle: 'Manage your LocalStripe customers'
+  },
+  '/products': {
+    title: 'Products',
+    subtitle: 'Manage products and their prices'
   },
   '/subscriptions': {
     title: 'Subscriptions',
@@ -78,6 +83,7 @@ function AppContent() {
           <Routes>
             <Route path="/" element={<Overview />} />
             <Route path="/customers" element={<Customers />} />
+            <Route path="/products" element={<Products />} />
             <Route path="/subscriptions" element={<Subscriptions />} />
             <Route path="/plans" element={<Plans />} />
             <Route path="/payments" element={<Payments />} />

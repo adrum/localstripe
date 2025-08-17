@@ -7,6 +7,7 @@ interface SidebarProps {
 const navigationItems = [
   { id: 'overview', label: 'Overview', icon: '📊', href: '/' },
   { id: 'customers', label: 'Customers', icon: '👥', href: '/customers' },
+  { id: 'products', label: 'Products', icon: '📦', href: '/products' },
   { id: 'subscriptions', label: 'Subscriptions', icon: '🔄', href: '/subscriptions' },
   { id: 'plans', label: 'Plans', icon: '📋', href: '/plans' },
   { id: 'payments', label: 'Payments', icon: '💳', href: '/payments' },
