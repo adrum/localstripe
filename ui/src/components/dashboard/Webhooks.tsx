@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Card, { CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
@@ -28,8 +28,8 @@ interface WebhookLog {
   status_code: number;
   attempt: number;
   created: number;
-  request_data: any;
-  response_data: any;
+  request_data: unknown;
+  response_data: unknown;
   response_time_ms: number;
 }
 
@@ -69,7 +69,7 @@ export default function Webhooks() {
 
   // Transform webhooks data
   const webhooks: Webhook[] = webhooksData 
-    ? Object.entries(webhooksData).map(([id, config]: [string, any]) => ({
+    ? Object.entries(webhooksData).map(([id, config]: [string, { url?: string; secret?: string; events?: string[] }]) => ({
         id,
         url: config.url || '',
         secret: config.secret || '',
@@ -84,10 +84,10 @@ export default function Webhooks() {
     setApiError('');
     try {
       await retryWebhookMutation.mutateAsync(logId);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to retry webhook:', error);
       setApiError(
-        error?.message || 
+        (error as Error)?.message || 
         'Failed to retry webhook. Please try again.'
       );
     }
@@ -144,10 +144,10 @@ export default function Webhooks() {
       });
       resetForm();
       setShowCreateForm(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to create webhook:', error);
       setApiError(
-        error?.message || 
+        (error as Error)?.message || 
         'Failed to create webhook. Please check your input and try again.'
       );
     }
@@ -159,10 +159,10 @@ export default function Webhooks() {
     setApiError('');
     try {
       await deleteWebhookMutation.mutateAsync(id);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to delete webhook:', error);
       setApiError(
-        error?.message || 
+        (error as Error)?.message || 
         'Failed to delete webhook. Please try again.'
       );
     }
@@ -576,14 +576,14 @@ export default function Webhooks() {
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             <CodeBlock 
                               title="Request Data" 
-                              data={log.request_data}
+                              data={log.request_data as object | string | number | boolean | null}
                               collapsible
                             />
                             
-                            {log.response_data && (
+                            {!!log.response_data && (
                               <CodeBlock 
                                 title="Response Data" 
-                                data={log.response_data}
+                                data={log.response_data as object | string | number | boolean | null}
                                 collapsible
                               />
                             )}

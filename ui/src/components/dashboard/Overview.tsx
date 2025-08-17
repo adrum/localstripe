@@ -4,13 +4,6 @@ import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
 import { useCustomers, useSubscriptions, useCharges, useHealthCheck, useFlushData } from '@/hooks/useAPI';
 
-interface OverviewStats {
-  customers: number;
-  subscriptions: number;
-  charges: number;
-  revenue: number;
-}
-
 export default function Overview() {
   const [apiError, setApiError] = useState<string>('');
 
@@ -32,8 +25,8 @@ export default function Overview() {
     
     // Calculate revenue from charges
     const chargesArray = chargesData?.data || [];
-    const revenue = chargesArray.reduce((sum: number, charge: any) => 
-      sum + (charge.paid ? charge.amount / 100 : 0), 0) || 0;
+    const revenue = chargesArray.reduce((sum: number, charge: { paid?: boolean; amount?: number }) => 
+      sum + (charge.paid ? (charge.amount || 0) / 100 : 0), 0) || 0;
 
     return {
       customers,
@@ -52,10 +45,10 @@ export default function Overview() {
     try {
       await flushDataMutation.mutateAsync();
       // Data will automatically refresh due to query invalidation in the hook
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to flush data:', error);
       setApiError(
-        error?.message || 
+        (error as Error)?.message || 
         'Failed to flush data. Please try again.'
       );
     }

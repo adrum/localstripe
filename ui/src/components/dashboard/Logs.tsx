@@ -204,7 +204,7 @@ export default function Logs() {
             </label>
             <input
               type="text"
-              value={filters.search}
+              value={filters.search || ''}
               onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
               placeholder="Search paths, IDs, or content..."
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
@@ -251,7 +251,7 @@ export default function Logs() {
             >
               <option value="">All Types</option>
               {uniqueObjectTypes.map(type => (
-                <option key={type} value={type}>{type}</option>
+                <option key={type} value={type || ''}>{type}</option>
               ))}
             </Select>
           </div>
@@ -321,11 +321,11 @@ export default function Logs() {
                           </div>
                         )}
                         
-                        {log.error && (
+                        {!!log.error && (
                           <div>
                             <span className="text-gray-600">Error:</span>
                             <span className="ml-2 text-red-600">
-                              {typeof log.error === 'string' ? log.error : log.error?.message || 'Error occurred'}
+                              {typeof log.error === 'string' ? log.error as string : (log.error as { message?: string })?.message || 'Error occurred'}
                             </span>
                           </div>
                         )}
@@ -354,18 +354,18 @@ export default function Logs() {
                 {expandedLog === log.id && (
                   <div className="border-t border-gray-200 p-4 bg-gray-50 space-y-4">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      {log.request_body && (
+                      {!!log.request_body && (
                         <CodeBlock
                           title="Request Body"
-                          data={log.request_body}
+                          data={log.request_body as object | string | number | boolean | null}
                           collapsible
                         />
                       )}
                       
-                      {log.response_body && (
+                      {!!log.response_body && (
                         <CodeBlock
                           title="Response Body"
-                          data={log.response_body}
+                          data={log.response_body as object | string | number | boolean | null}
                           collapsible
                         />
                       )}

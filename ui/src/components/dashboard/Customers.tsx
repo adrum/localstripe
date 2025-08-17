@@ -56,10 +56,10 @@ export default function Customers() {
       await createCustomerMutation.mutateAsync(newCustomer);
       setNewCustomer({ email: '', name: '', description: '' });
       setShowCreateForm(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to create customer:', error);
       setApiError(
-        error?.message || 
+        (error as Error)?.message || 
         'Failed to create customer. Please check your input and try again.'
       );
     }
@@ -71,10 +71,10 @@ export default function Customers() {
     setApiError('');
     try {
       await deleteCustomerMutation.mutateAsync(id);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to delete customer:', error);
       setApiError(
-        error?.message || 
+        (error as Error)?.message || 
         'Failed to delete customer. Please try again.'
       );
     }

@@ -20,7 +20,7 @@ export const useCustomer = (id: string) => {
 export const useCreateCustomer = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, any>) => api.createCustomer(data),
+    mutationFn: (data: Record<string, string | number | boolean>) => api.createCustomer(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
     },
@@ -30,7 +30,7 @@ export const useCreateCustomer = () => {
 export const useUpdateCustomer = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Record<string, any> }) =>
+    mutationFn: ({ id, data }: { id: string; data: Record<string, string | number | boolean> }) =>
       api.updateCustomer(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
@@ -68,7 +68,7 @@ export const useSubscription = (id: string) => {
 export const useCreateSubscription = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, any>) => api.createSubscription(data),
+    mutationFn: (data: Record<string, string | number | boolean>) => api.createSubscription(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
     },
@@ -86,7 +86,7 @@ export const usePlans = () => {
 export const useCreatePlan = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, any>) => api.createPlan(data),
+    mutationFn: (data: Record<string, string | number | boolean>) => api.createPlan(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
     },
@@ -112,7 +112,7 @@ export const useCharge = (id: string) => {
 export const useCreateCharge = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, any>) => api.createCharge(data),
+    mutationFn: (data: Record<string, string | number | boolean>) => api.createCharge(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['charges'] });
     },
@@ -138,7 +138,7 @@ export const usePaymentIntent = (id: string) => {
 export const useCreatePaymentIntent = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, any>) => api.createPaymentIntent(data),
+    mutationFn: (data: Record<string, string | number | boolean>) => api.createPaymentIntent(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment_intents'] });
     },
@@ -202,6 +202,40 @@ export const useHealthCheck = () => {
     queryKey: ['health'],
     queryFn: () => api.healthCheck(),
     refetchInterval: 30000, // Check every 30 seconds
+  });
+};
+
+// API Logs
+export const useAPILogs = (filters?: {
+  limit?: number;
+  offset?: number;
+  method?: string;
+  status_code?: number;
+  object_type?: string;
+  object_id?: string;
+}) => {
+  const params = new URLSearchParams();
+  if (filters?.limit) params.append('limit', filters.limit.toString());
+  if (filters?.offset) params.append('offset', filters.offset.toString());
+  if (filters?.method) params.append('method', filters.method);
+  if (filters?.status_code) params.append('status_code', filters.status_code.toString());
+  if (filters?.object_type) params.append('object_type', filters.object_type);
+  if (filters?.object_id) params.append('object_id', filters.object_id);
+  
+  return useQuery({
+    queryKey: ['api_logs', filters],
+    queryFn: () => api.getAPILogs(params.toString()),
+    refetchInterval: 5000, // Refresh every 5 seconds
+  });
+};
+
+export const useClearAPILogs = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.clearAPILogs(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api_logs'] });
+    },
   });
 };
 

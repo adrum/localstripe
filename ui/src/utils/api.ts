@@ -41,7 +41,7 @@ class LocalStripeAPI {
     }
   }
 
-  private formEncode(data: Record<string, any>): string {
+  private formEncode(data: Record<string, string | number | boolean>): string {
     return Object.entries(data)
       .map(([key, value]) =>
         `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
@@ -51,21 +51,21 @@ class LocalStripeAPI {
 
   // Customer endpoints
   async getCustomers() {
-    return this.request('/v1/customers');
+    return this.request<{ data: any[] }>('/v1/customers');
   }
 
   async getCustomer(id: string) {
     return this.request(`/v1/customers/${id}`);
   }
 
-  async createCustomer(data: Record<string, any>) {
+  async createCustomer(data: Record<string, string | number | boolean>) {
     return this.request('/v1/customers', {
       method: 'POST',
       body: this.formEncode(data),
     });
   }
 
-  async updateCustomer(id: string, data: Record<string, any>) {
+  async updateCustomer(id: string, data: Record<string, string | number | boolean>) {
     return this.request(`/v1/customers/${id}`, {
       method: 'POST',
       body: this.formEncode(data),
@@ -80,14 +80,14 @@ class LocalStripeAPI {
 
   // Subscription endpoints
   async getSubscriptions() {
-    return this.request('/v1/subscriptions');
+    return this.request<{ data: any[] }>('/v1/subscriptions');
   }
 
   async getSubscription(id: string) {
     return this.request(`/v1/subscriptions/${id}`);
   }
 
-  async createSubscription(data: Record<string, any>) {
+  async createSubscription(data: Record<string, string | number | boolean>) {
     return this.request('/v1/subscriptions', {
       method: 'POST',
       body: this.formEncode(data),
@@ -96,10 +96,10 @@ class LocalStripeAPI {
 
   // Plan endpoints
   async getPlans() {
-    return this.request('/v1/plans');
+    return this.request<{ data: any[] }>('/v1/plans');
   }
 
-  async createPlan(data: Record<string, any>) {
+  async createPlan(data: Record<string, string | number | boolean>) {
     return this.request('/v1/plans', {
       method: 'POST',
       body: this.formEncode(data),
@@ -108,14 +108,14 @@ class LocalStripeAPI {
 
   // Charge endpoints
   async getCharges() {
-    return this.request('/v1/charges');
+    return this.request<{ data: any[] }>('/v1/charges');
   }
 
   async getCharge(id: string) {
     return this.request(`/v1/charges/${id}`);
   }
 
-  async createCharge(data: Record<string, any>) {
+  async createCharge(data: Record<string, string | number | boolean>) {
     return this.request('/v1/charges', {
       method: 'POST',
       body: this.formEncode(data),
@@ -124,14 +124,14 @@ class LocalStripeAPI {
 
   // Payment Intent endpoints
   async getPaymentIntents() {
-    return this.request('/v1/payment_intents');
+    return this.request<{ data: any[] }>('/v1/payment_intents');
   }
 
   async getPaymentIntent(id: string) {
     return this.request(`/v1/payment_intents/${id}`);
   }
 
-  async createPaymentIntent(data: Record<string, any>) {
+  async createPaymentIntent(data: Record<string, string | number | boolean>) {
     return this.request('/v1/payment_intents', {
       method: 'POST',
       body: this.formEncode(data),
@@ -140,7 +140,7 @@ class LocalStripeAPI {
 
   // Webhook configuration
   async configureWebhook(name: string, url: string, secret: string, events?: string[]) {
-    const data: Record<string, any> = { url, secret };
+    const data: Record<string, string> = { url, secret };
     if (events) {
       data.events = events.join(',');
     }
@@ -163,7 +163,7 @@ class LocalStripeAPI {
 
   // Webhook logs
   async getWebhookLogs(limit = 50, offset = 0) {
-    return this.request(`/_config/webhook_logs?limit=${limit}&offset=${offset}`);
+    return this.request<{ data: any[] }>(`/_config/webhook_logs?limit=${limit}&offset=${offset}`);
   }
 
   async retryWebhook(logId: string) {
@@ -176,7 +176,7 @@ class LocalStripeAPI {
   // API Logs
   async getAPILogs(queryParams = '') {
     const url = queryParams ? `/_config/api_logs?${queryParams}` : '/_config/api_logs';
-    return this.request(url);
+    return this.request<{ data: any[] }>(url);
   }
 
   async clearAPILogs() {

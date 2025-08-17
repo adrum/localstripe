@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 interface CodeBlockProps {
-  data: any;
+  data: object | string | number | boolean | null;
   title?: string;
   collapsible?: boolean;
   className?: string;

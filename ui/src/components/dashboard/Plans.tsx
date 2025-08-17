@@ -79,10 +79,10 @@ export default function Plans() {
       await createPlanMutation.mutateAsync(planData);
       resetForm();
       setShowCreateForm(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to create plan:', error);
       setApiError(
-        error?.message || 
+        (error as Error)?.message || 
         'Failed to create plan. Please check your input and try again.'
       );
     }
@@ -201,7 +201,7 @@ export default function Plans() {
               >
                 <Select
                   value={newPlan.interval}
-                  onChange={(e) => setNewPlan(prev => ({ ...prev, interval: e.target.value as any }))}
+                  onChange={(e) => setNewPlan(prev => ({ ...prev, interval: e.target.value as 'day' | 'week' | 'month' | 'year' }))}
                 >
                   <option value="day">Day</option>
                   <option value="week">Week</option>

@@ -67,20 +67,25 @@ export default function Charges() {
       };
       
       // Remove empty fields
-      if (!chargeData.customer.trim()) {
-        delete (chargeData as any).customer;
+      const finalData: Record<string, string | number | boolean> = {
+        amount: chargeData.amount,
+        currency: chargeData.currency,
+        source: chargeData.source,
+      };
+      if (chargeData.customer.trim()) {
+        finalData.customer = chargeData.customer;
       }
-      if (!chargeData.description.trim()) {
-        delete (chargeData as any).description;
+      if (chargeData.description.trim()) {
+        finalData.description = chargeData.description;
       }
       
-      await createChargeMutation.mutateAsync(chargeData);
+      await createChargeMutation.mutateAsync(finalData);
       resetForm();
       setShowCreateForm(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to create charge:', error);
       setApiError(
-        error?.message || 
+        (error as Error)?.message || 
         'Failed to create charge. Please check your input and try again.'
       );
     }

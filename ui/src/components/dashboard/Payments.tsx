@@ -62,20 +62,24 @@ export default function Payments() {
       };
       
       // Remove empty fields
-      if (!paymentData.customer.trim()) {
-        delete (paymentData as any).customer;
+      const finalData: Record<string, string | number | boolean> = {
+        amount: paymentData.amount,
+        currency: paymentData.currency,
+      };
+      if (paymentData.customer.trim()) {
+        finalData.customer = paymentData.customer;
       }
-      if (!paymentData.description.trim()) {
-        delete (paymentData as any).description;
+      if (paymentData.description.trim()) {
+        finalData.description = paymentData.description;
       }
       
-      await createPaymentIntentMutation.mutateAsync(paymentData);
+      await createPaymentIntentMutation.mutateAsync(finalData);
       resetForm();
       setShowCreateForm(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to create payment intent:', error);
       setApiError(
-        error?.message || 
+        (error as Error)?.message || 
         'Failed to create payment intent. Please check your input and try again.'
       );
     }
