@@ -232,37 +232,10 @@ async def api_logging_middleware(request, handler):
     try:
         # Process the request
         response = await handler(request)
-        
-        # Log successful response
-        if response.status < 400:
-            try:
-                # Try to get response body for successful requests
-                if hasattr(response, 'text'):
-                    response_text = response.text
-                    try:
-                        response_body = json.loads(response_text)
-                    except:
-                        response_body = response_text
-                    api_log.complete_request(response.status, response_body)
-                else:
-                    api_log.complete_request(response.status)
-            except:
-                api_log.complete_request(response.status)
-        else:
-            # Log error response
-            try:
-                if hasattr(response, 'text'):
-                    error_text = response.text
-                    try:
-                        error_body = json.loads(error_text)
-                    except:
-                        error_body = error_text
-                    api_log.complete_request(response.status, error=error_body)
-                else:
-                    api_log.complete_request(response.status)
-            except:
-                api_log.complete_request(response.status)
-        
+
+        # Log successful response (without interfering with response body)
+        api_log.complete_request(response.status)
+
         return response
         
     except Exception as e:
