@@ -17,6 +17,7 @@ import asyncio
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import hashlib
+import os
 import pickle
 import random
 import re
@@ -37,10 +38,13 @@ _type = type
 class Store(dict):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.disk_path = os.environ.get('LOCALSTRIPE_DISK_PATH', '/tmp/localstripe.pickle')
 
     def try_load_from_disk(self):
+        if not hasattr(self, 'disk_path'):
+            self.disk_path = os.environ.get('LOCALSTRIPE_DISK_PATH', '/tmp/localstripe.pickle')
         try:
-            with open('/tmp/localstripe.pickle', 'rb') as f:
+            with open(self.disk_path, 'rb') as f:
                 old = pickle.load(f)
                 self.clear()
                 self.update(old)
@@ -48,7 +52,10 @@ class Store(dict):
             pass
 
     def dump_to_disk(self):
-        with open('/tmp/localstripe.pickle', 'wb') as f:
+        if not hasattr(self, 'disk_path'):
+            self.disk_path = os.environ.get('LOCALSTRIPE_DISK_PATH', '/tmp/localstripe.pickle')
+        os.makedirs(os.path.dirname(self.disk_path), exist_ok=True)
+        with open(self.disk_path, 'wb') as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     def __setitem__(self, *args, **kwargs):
