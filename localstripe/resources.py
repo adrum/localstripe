@@ -1881,7 +1881,8 @@ class PaymentIntent(StripeObject):
 
     def __init__(self, amount=None, currency=None, customer=None,
                  payment_method=None, metadata=None, payment_method_types=None,
-                 capture_method=None, payment_method_options=None, **kwargs):
+                 capture_method=None, payment_method_options=None,
+                 setup_future_usage=None, **kwargs):
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
@@ -1901,6 +1902,8 @@ class PaymentIntent(StripeObject):
                 assert capture_method in ('automatic',
                                           'automatic_async',
                                           'manual')
+            if setup_future_usage is not None:
+                assert setup_future_usage in ('on_session', 'off_session')
         except AssertionError:
             raise UserError(400, 'Bad request')
 
@@ -1923,6 +1926,8 @@ class PaymentIntent(StripeObject):
         self.invoice = None
         self.next_action = None
         self.capture_method = capture_method or 'automatic_async'
+        self.setup_future_usage = setup_future_usage
+        # amount_refunded is calculated from associated charges, don't set directly
 
         self._canceled = False
         self._authentication_failed = False
