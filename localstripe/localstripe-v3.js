@@ -125,9 +125,12 @@ class Element {
     };
 
     const changed = event => {
+      // Remove spaces from card number for value storage
+      const cardNumber = this._inputs.number.value.replace(/\s/g, '');
+
       this.value = {
         card: {
-          number: this._inputs.number.value,
+          number: cardNumber,
           exp_month: this._inputs.exp_month.value,
           exp_year: '20' + this._inputs.exp_year.value,
           cvc: this._inputs.cvc.value,
@@ -135,32 +138,137 @@ class Element {
         postal_code: this._inputs.postal_code.value,
       }
 
-      if (event.target === this._inputs.number &&
-          this.value.card.number.length >= 16) {
+      // Auto-advance focus between fields
+      if (event.target === this._inputs.number && cardNumber.length >= 16) {
         this._inputs.exp_month.focus();
       } else if (event.target === this._inputs.exp_month &&
-                 parseInt(this.value.card.exp_month) > 1) {
+                 this._inputs.exp_month.value.length >= 2) {
         this._inputs.exp_year.focus();
       } else if (event.target === this._inputs.exp_year &&
-                 this.value.card.exp_year.length >= 4) {
+                 this._inputs.exp_year.value.length >= 2) {
         this._inputs.cvc.focus();
       } else if (event.target === this._inputs.cvc &&
-                 this.value.card.cvc.length >= 3) {
+                 this._inputs.cvc.value.length >= 3) {
         this._inputs.postal_code.focus();
       }
 
       (this.listeners['change'] || []).forEach(handler => handler());
     };
 
+    // Create container for inputs with Stripe-like styling
+    const container = document.createElement('div');
+    container.style.cssText = `
+      background: #fff;
+      border: 1px solid #cfd7df;
+      border-radius: 4px;
+      padding: 10px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      box-shadow: 0 1px 3px 0 rgba(18, 20, 23, 0.03);
+    `;
+
+    // Add focus styles on container
+    const updateContainerFocus = (focused) => {
+      if (focused) {
+        container.style.borderColor = '#635bff';
+        container.style.boxShadow = '0 1px 3px 0 rgba(18, 20, 23, 0.03), 0 4px 6px 0 rgba(18, 20, 23, 0.02), 0 0 0 3px rgba(99, 91, 255, 0.1)';
+      } else {
+        container.style.borderColor = '#cfd7df';
+        container.style.boxShadow = '0 1px 3px 0 rgba(18, 20, 23, 0.03)';
+      }
+    };
+
+    this._domChildren.push(container);
+
+    // Field configurations
+    const fieldConfigs = {
+      number: { placeholder: '1234 1234 1234 1234', width: '200px' },
+      exp_month: { placeholder: 'MM', width: '40px' },
+      exp_year: { placeholder: 'YY', width: '40px' },
+      cvc: { placeholder: 'CVC', width: '50px' },
+      postal_code: { placeholder: 'ZIP', width: '60px' }
+    };
+
     Object.keys(this._inputs).forEach(field => {
-      this._inputs[field] = document.createElement('input');
-      this._inputs[field].setAttribute('type', 'text');
-      this._inputs[field].setAttribute('placeholder', field);
-      this._inputs[field].setAttribute('size', field === 'number' ? 16 :
-                                       field === 'postal_code' ? 5 :
-                                       field === 'cvc' ? 3 : 2);
-      this._inputs[field].oninput = changed;
-      this._domChildren.push(this._inputs[field]);
+      const config = fieldConfigs[field];
+      const input = document.createElement('input');
+
+      input.setAttribute('type', 'text');
+      input.setAttribute('placeholder', config.placeholder);
+      input.style.cssText = `
+        border: none;
+        outline: none;
+        background: transparent;
+        font-family: inherit;
+        font-size: inherit;
+        color: #32325d;
+        width: ${config.width};
+        min-width: ${config.width};
+        padding: 0;
+        margin: 0;
+      `;
+
+      // Add input mask formatting for card number
+      if (field === 'number') {
+        input.oninput = (e) => {
+          let value = e.target.value.replace(/\s/g, '').replace(/[^0-9]/g, '');
+          value = value.replace(/(.{4})/g, '$1 ').trim();
+          if (value.length > 19) value = value.substring(0, 19);
+          e.target.value = value;
+          changed(e);
+        };
+      } else if (field === 'exp_month') {
+        input.oninput = (e) => {
+          let value = e.target.value.replace(/[^0-9]/g, '');
+          if (value.length > 2) value = value.substring(0, 2);
+          if (value.length === 2 && parseInt(value) > 12) value = '12';
+          if (value.length === 1 && parseInt(value) > 1) value = '0' + value;
+          e.target.value = value;
+          changed(e);
+        };
+      } else if (field === 'exp_year') {
+        input.oninput = (e) => {
+          let value = e.target.value.replace(/[^0-9]/g, '');
+          if (value.length > 2) value = value.substring(0, 2);
+          e.target.value = value;
+          changed(e);
+        };
+      } else if (field === 'cvc') {
+        input.oninput = (e) => {
+          let value = e.target.value.replace(/[^0-9]/g, '');
+          if (value.length > 4) value = value.substring(0, 4);
+          e.target.value = value;
+          changed(e);
+        };
+      } else {
+        input.oninput = changed;
+      }
+
+      // Add focus/blur event handlers
+      input.onfocus = () => updateContainerFocus(true);
+      input.onblur = () => {
+        // Check if any input in the container still has focus
+        setTimeout(() => {
+          const anyFocused = Object.values(this._inputs).some(inp => inp === document.activeElement);
+          updateContainerFocus(anyFocused);
+        }, 0);
+      };
+
+      this._inputs[field] = input;
+      container.appendChild(input);
+
+      // Add separators between fields
+      if (field === 'number' || field === 'exp_year') {
+        const separator = document.createElement('span');
+        separator.textContent = field === 'number' ? ' / ' : ' ';
+        separator.style.cssText = 'color: #8898aa; font-size: 14px; user-select: none;';
+        container.appendChild(separator);
+      }
     });
 
     this._domChildren.forEach((child) => domElement.appendChild(child));
