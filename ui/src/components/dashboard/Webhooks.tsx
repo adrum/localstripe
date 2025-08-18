@@ -450,11 +450,11 @@ export default function Webhooks() {
               <Card>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Total Deliveries</p>
-                    <p className="text-2xl font-bold text-gray-900">{webhookLogs.length}</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Deliveries</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{webhookLogs.length}</p>
                   </div>
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <span className="text-blue-600">📊</span>
+                  <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+                    <i className="fas fa-chart-bar text-blue-600 dark:text-blue-200"></i>
                   </div>
                 </div>
               </Card>
@@ -462,13 +462,13 @@ export default function Webhooks() {
               <Card>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Successful</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Successful</p>
                     <p className="text-2xl font-bold text-green-600">
                       {webhookLogs.filter(log => log.status_code >= 200 && log.status_code < 300).length}
                     </p>
                   </div>
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                    <span className="text-green-600">✅</span>
+                  <div className="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
+                    <i className="fas fa-check text-green-600 dark:text-green-200"></i>
                   </div>
                 </div>
               </Card>
@@ -476,11 +476,11 @@ export default function Webhooks() {
               <Card>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Failed</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Failed</p>
                     <p className="text-2xl font-bold text-red-600">{failedLogs.length}</p>
                   </div>
-                  <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
-                    <span className="text-red-600">❌</span>
+                  <div className="w-8 h-8 bg-red-100 dark:bg-red-900 rounded-lg flex items-center justify-center">
+                    <i className="fas fa-times text-red-600 dark:text-red-200"></i>
                   </div>
                 </div>
               </Card>
@@ -503,9 +503,9 @@ export default function Webhooks() {
               </CardHeader>
               
               {isLoadingLogs ? (
-                <div className="py-8 text-center text-gray-500">Loading webhook logs...</div>
+                <div className="py-8 text-center text-gray-500 dark:text-gray-400">Loading webhook logs...</div>
               ) : webhookLogs.length === 0 ? (
-                <div className="py-8 text-center text-gray-500">
+                <div className="py-8 text-center text-gray-500 dark:text-gray-400">
                   <div className="mb-4">
                     <i className="fas fa-webhook text-4xl text-gray-400 dark:text-gray-500"></i>
                   </div>
@@ -515,17 +515,17 @@ export default function Webhooks() {
               ) : (
                 <div className="space-y-4">
                   {webhookLogs.map((log) => (
-                    <div key={log.id} className="border border-gray-200 rounded-lg">
+                    <div key={log.id} className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
                       <div className="p-4">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center space-x-3 mb-2">
-                              <span className="font-mono text-sm font-medium text-gray-900">{log.event_type}</span>
+                              <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">{log.event_type}</span>
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(log.status_code)}`}>
                                 {log.status_code}
                               </span>
                               {log.attempt > 1 && (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
                                   Attempt #{log.attempt}
                                 </span>
                               )}
@@ -533,16 +533,16 @@ export default function Webhooks() {
                             
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                               <div>
-                                <span className="text-gray-600">Webhook:</span>
-                                <span className="ml-2 font-mono text-gray-900">{log.webhook_id}</span>
+                                <span className="text-gray-600 dark:text-gray-400">Webhook:</span>
+                                <span className="ml-2 font-mono text-gray-900 dark:text-white">{log.webhook_id}</span>
                               </div>
                               <div>
-                                <span className="text-gray-600">Response Time:</span>
-                                <span className="ml-2 text-gray-900">{log.response_time_ms}ms</span>
+                                <span className="text-gray-600 dark:text-gray-400">Response Time:</span>
+                                <span className="ml-2 text-gray-900 dark:text-white">{log.response_time_ms}ms</span>
                               </div>
                               <div>
-                                <span className="text-gray-600">Delivered:</span>
-                                <span className="ml-2 text-gray-900">{formatDate(log.created)}</span>
+                                <span className="text-gray-600 dark:text-gray-400">Delivered:</span>
+                                <span className="ml-2 text-gray-900 dark:text-white">{formatDate(log.created)}</span>
                               </div>
                             </div>
                           </div>
@@ -569,10 +569,10 @@ export default function Webhooks() {
                       </div>
                       
                       {expandedLog === log.id && (
-                        <div className="border-t border-gray-200 p-4 bg-gray-50 space-y-4">
+                        <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-700 space-y-4">
                           <div>
-                            <p className="text-sm font-medium text-gray-700 mb-2">Request URL</p>
-                            <p className="text-sm font-mono bg-white p-2 rounded border">{log.url}</p>
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Request URL</p>
+                            <p className="text-sm font-mono bg-white dark:bg-gray-800 text-gray-900 dark:text-white p-2 rounded border dark:border-gray-600">{log.url}</p>
                           </div>
                           
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

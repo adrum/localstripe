@@ -29,18 +29,18 @@ interface APILog {
 }
 
 const METHOD_COLORS: Record<string, string> = {
-  GET: 'text-blue-600 bg-blue-100',
-  POST: 'text-green-600 bg-green-100',
-  PUT: 'text-yellow-600 bg-yellow-100',
-  PATCH: 'text-orange-600 bg-orange-100',
-  DELETE: 'text-red-600 bg-red-100',
+  GET: 'text-blue-600 bg-blue-100 dark:text-blue-200 dark:bg-blue-900',
+  POST: 'text-green-600 bg-green-100 dark:text-green-200 dark:bg-green-900',
+  PUT: 'text-yellow-600 bg-yellow-100 dark:text-yellow-200 dark:bg-yellow-900',
+  PATCH: 'text-orange-600 bg-orange-100 dark:text-orange-200 dark:bg-orange-900',
+  DELETE: 'text-red-600 bg-red-100 dark:text-red-200 dark:bg-red-900',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  '2xx': 'text-green-600 bg-green-100',
-  '3xx': 'text-blue-600 bg-blue-100',
-  '4xx': 'text-yellow-600 bg-yellow-100',
-  '5xx': 'text-red-600 bg-red-100',
+  '2xx': 'text-green-600 bg-green-100 dark:text-green-200 dark:bg-green-900',
+  '3xx': 'text-blue-600 bg-blue-100 dark:text-blue-200 dark:bg-blue-900',
+  '4xx': 'text-yellow-600 bg-yellow-100 dark:text-yellow-200 dark:bg-yellow-900',
+  '5xx': 'text-red-600 bg-red-100 dark:text-red-200 dark:bg-red-900',
 };
 
 export default function Logs() {
@@ -89,7 +89,7 @@ export default function Logs() {
     if (statusCode >= 300 && statusCode < 400) return STATUS_COLORS['3xx'];
     if (statusCode >= 400 && statusCode < 500) return STATUS_COLORS['4xx'];
     if (statusCode >= 500) return STATUS_COLORS['5xx'];
-    return 'text-gray-600 bg-gray-100';
+    return 'text-gray-600 bg-gray-100 dark:text-gray-200 dark:bg-gray-700';
   };
 
   const handleObjectClick = (objectType: string | null, objectId: string | null) => {
@@ -153,8 +153,8 @@ export default function Logs() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">API Logs</h1>
-          <p className="text-sm text-gray-600 mt-1">
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">API Logs</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Monitor all API requests and responses with detailed logging
           </p>
         </div>
@@ -172,29 +172,29 @@ export default function Logs() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <div>
-            <p className="text-sm font-medium text-gray-600">Total Requests</p>
-            <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Requests</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
           </div>
         </Card>
 
         <Card>
           <div>
-            <p className="text-sm font-medium text-gray-600">Successful</p>
+            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Successful</p>
             <p className="text-2xl font-bold text-green-600">{stats.successful}</p>
           </div>
         </Card>
 
         <Card>
           <div>
-            <p className="text-sm font-medium text-gray-600">Errors</p>
+            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Errors</p>
             <p className="text-2xl font-bold text-red-600">{stats.errors}</p>
           </div>
         </Card>
 
         <Card>
           <div>
-            <p className="text-sm font-medium text-gray-600">Avg Duration</p>
-            <p className="text-2xl font-bold text-gray-900">{stats.avgDuration}ms</p>
+            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Avg Duration</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.avgDuration}ms</p>
           </div>
         </Card>
       </div>
@@ -206,7 +206,7 @@ export default function Logs() {
         </CardHeader>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Search
             </label>
             <input
@@ -214,12 +214,12 @@ export default function Logs() {
               value={filters.search || ''}
               onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
               placeholder="Search paths, IDs, or content..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Method
             </label>
             <Select
@@ -234,7 +234,7 @@ export default function Logs() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Status Code
             </label>
             <Select
@@ -249,7 +249,7 @@ export default function Logs() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Object Type
             </label>
             <Select
@@ -279,9 +279,9 @@ export default function Logs() {
         </CardHeader>
 
         {isLoading ? (
-          <div className="py-8 text-center text-gray-500">Loading logs...</div>
+          <div className="py-8 text-center text-gray-500 dark:text-gray-400">Loading logs...</div>
         ) : filteredLogs.length === 0 ? (
-          <div className="py-8 text-center text-gray-500">
+          <div className="py-8 text-center text-gray-500 dark:text-gray-400">
             <div className="mb-4">
               <i className="fas fa-file-alt text-4xl text-gray-400 dark:text-gray-500"></i>
             </div>
@@ -295,35 +295,35 @@ export default function Logs() {
         ) : (
           <div className="space-y-4">
             {filteredLogs.map((log) => (
-              <div key={log.id} className="border border-gray-200 rounded-lg">
+              <div key={log.id} className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
                 <div className="p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium ${METHOD_COLORS[log.method] || 'text-gray-600 bg-gray-100'}`}>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium ${METHOD_COLORS[log.method] || 'text-gray-600 bg-gray-100 dark:text-gray-200 dark:bg-gray-700'}`}>
                           {log.method}
                         </span>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium ${getStatusColor(log.status_code)}`}>
                           {log.status_code}
                         </span>
-                        <span className="font-mono text-sm text-gray-900">{log.path}</span>
+                        <span className="font-mono text-sm text-gray-900 dark:text-white">{log.path}</span>
                         { Object.prototype.hasOwnProperty.call(log, 'duration_ms') && (
-                          <span className="text-xs text-gray-500">{log.duration_ms}ms</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">{log.duration_ms}ms</span>
                         )}
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div>
-                          <span className="text-gray-600">Time:</span>
-                          <span className="ml-2 text-gray-900">{formatDate(log.created)}</span>
+                          <span className="text-gray-600 dark:text-gray-400">Time:</span>
+                          <span className="ml-2 text-gray-900 dark:text-white">{formatDate(log.created)}</span>
                         </div>
 
                         {log.object_type && log.object_id && (
                           <div>
-                            <span className="text-gray-600">Object:</span>
+                            <span className="text-gray-600 dark:text-gray-400">Object:</span>
                             <button
                               onClick={() => handleObjectClick(log.object_type, log.object_id)}
-                              className="ml-2 text-purple-600 hover:text-purple-700 font-mono text-sm"
+                              className="ml-2 text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 font-mono text-sm"
                             >
                               {log.object_type}/{log.object_id}
                             </button>
@@ -332,24 +332,24 @@ export default function Logs() {
 
                         {!!log.error && (
                           <div>
-                            <span className="text-gray-600">Error:</span>
+                            <span className="text-gray-600 dark:text-gray-400">Error:</span>
                             <div className="ml-2 mt-1">
                               {typeof log.error === 'string' ? (
-                                <span className="text-red-600">{log.error}</span>
+                                <span className="text-red-600 dark:text-red-400">{log.error}</span>
                               ) : typeof log.error === 'object' && (log.error as APILogError)?.message ? (
-                                <div className="bg-red-50 border border-red-200 rounded p-2">
-                                  <div className="flex items-center text-red-700 font-medium text-sm">
+                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2">
+                                  <div className="flex items-center text-red-700 dark:text-red-300 font-medium text-sm">
                                     <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                       <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                                     </svg>
                                     {(log.error as APILogError).type || 'Error'}
                                   </div>
-                                  <div className="text-red-600 text-xs mt-1 font-mono">
+                                  <div className="text-red-600 dark:text-red-400 text-xs mt-1 font-mono">
                                     {(log.error as APILogError).message}
                                   </div>
                                 </div>
                               ) : (
-                                <span className="text-red-600">Error occurred</span>
+                                <span className="text-red-600 dark:text-red-400">Error occurred</span>
                               )}
                             </div>
                           </div>
@@ -358,8 +358,8 @@ export default function Logs() {
 
                       {Object.keys(log.query_params || {}).length > 0 && (
                         <div className="mt-2">
-                          <span className="text-sm text-gray-600">Query Params:</span>
-                          <span className="ml-2 font-mono text-xs text-gray-700">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Query Params:</span>
+                          <span className="ml-2 font-mono text-xs text-gray-700 dark:text-gray-300">
                             {new URLSearchParams(log.query_params).toString()}
                           </span>
                         </div>
@@ -377,7 +377,7 @@ export default function Logs() {
                 </div>
 
                 {expandedLog === log.id && (
-                  <div className="border-t border-gray-200 p-4 bg-gray-50 space-y-4">
+                  <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-700 space-y-4">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {log.request_body ? (
                         <CodeBlock
@@ -386,7 +386,7 @@ export default function Logs() {
                           collapsible
                         />
                       ) : (
-                        <div className="text-sm text-gray-500 border border-gray-200 rounded-md p-2 flex items-center justify-center">
+                        <div className="text-sm text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-md p-2 flex items-center justify-center bg-white dark:bg-gray-800">
                           No request body data available
                         </div>
                       )}
@@ -398,7 +398,7 @@ export default function Logs() {
                           collapsible
                         />
                       ) : (
-                        <div className="text-sm text-gray-500 border border-gray-200 rounded-md p-2 flex items-center justify-center">
+                        <div className="text-sm text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-md p-2 flex items-center justify-center bg-white dark:bg-gray-800">
                           No response body data available
                         </div>
                       )}
@@ -414,7 +414,7 @@ export default function Logs() {
                       )}
 
                       {!log.request_body && !log.response_body && !log.error && (
-                        <div className="text-sm text-gray-500">
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
                           No request or response body data available
                         </div>
                       )}
