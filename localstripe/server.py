@@ -229,9 +229,12 @@ async def api_logging_middleware(request, handler):
 
     # Skip logging for internal config endpoints (except api_logs fetching), static files, and UI routes
     if (request.path.startswith('/_config/api_logs') or 
+        request.path.startswith('/_config/webhooks') or
+        request.path.startswith('/_config/data') or
         request.path.startswith('/js.stripe.com/') or
         request.path == '/' or
-        request.path.endswith(('.js', '.css', '.html', '.svg', '.png', '.jpg'))):
+        request.path.startswith('/assets/') or
+        request.path.endswith(('.js', '.css', '.html', '.svg', '.png', '.jpg', '.ico', '.woff', '.woff2', '.ttf'))):
         return await handler(request)
     
     # Get request data
