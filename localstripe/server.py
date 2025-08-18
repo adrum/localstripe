@@ -53,9 +53,9 @@ async def add_cors_headers(request, response):
     if origin:
         response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Headers'] = \
-            'Content-Type, Accept'
+            'Content-Type, Accept, Authorization, X-LocalStripe-UI, X-Requested-With'
         response.headers['Access-Control-Allow-Methods'] = \
-            'GET, POST, OPTIONS, DELETE'
+            'GET, POST, PUT, PATCH, DELETE, OPTIONS'
 
 
 @web.middleware
@@ -163,6 +163,10 @@ def get_api_key(request):
 
 @web.middleware
 async def auth_middleware(request, handler):
+    # Handle OPTIONS preflight requests
+    if request.method == 'OPTIONS':
+        return web.Response(status=200)
+
     # Skip authentication for static files and UI routes
     if (
         request.path.startswith('/js.stripe.com/')
