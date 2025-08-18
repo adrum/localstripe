@@ -3141,7 +3141,7 @@ class Subscription(StripeObject):
                  enable_incomplete_payments=True,  # legacy support
                  payment_behavior='allow_incomplete',
                  trial_period_days=None, billing_cycle_anchor=None,
-                 proration_behavior=None, **kwargs):
+                 proration_behavior=None, off_session=None, **kwargs):
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
@@ -3206,6 +3206,9 @@ class Subscription(StripeObject):
             assert type(enable_incomplete_payments) is bool
             assert payment_behavior in ('allow_incomplete',
                                         'error_if_incomplete')
+            if off_session is not None:
+                off_session = try_convert_to_bool(off_session)
+                assert type(off_session) is bool
         except AssertionError:
             raise UserError(400, 'Bad request')
 
@@ -3245,6 +3248,7 @@ class Subscription(StripeObject):
         self.latest_invoice = None
         self.start_date = backdate_start_date or int(time.time())
         self.billing_cycle_anchor = billing_cycle_anchor
+        self.off_session = off_session
         self._enable_incomplete_payments = (
             enable_incomplete_payments and
             payment_behavior != 'error_if_incomplete')
