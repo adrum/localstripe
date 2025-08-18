@@ -2642,7 +2642,6 @@ class Price(StripeObject):
         nickname=None,
         product=None,
         tax_behavior=None,
-        type='one_time',
         unit_amount=None,
         unit_amount_decimal=None,
         currency_options=None,
@@ -2656,12 +2655,18 @@ class Price(StripeObject):
         recurring=None,
         **kwargs,
     ):
+        # Remove 'type' from kwargs if present (for backward compatibility)
+        kwargs.pop('type', None)
+
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
         active = try_convert_to_bool(active)
         unit_amount = try_convert_to_int(unit_amount)
         transfer_lookup_key = try_convert_to_bool(transfer_lookup_key)
+
+        # Determine type based on whether recurring is provided
+        type = 'recurring' if recurring is not None else 'one_time'
 
         try:
             assert id is None or _type(id) is str and id
@@ -2672,7 +2677,6 @@ class Price(StripeObject):
                 assert _type(nickname) is str
             if tax_behavior is not None:
                 assert tax_behavior in ('inclusive', 'exclusive', 'unspecified')
-            assert type in ('one_time', 'recurring')
             if unit_amount is not None:
                 assert _type(unit_amount) is int and unit_amount >= 0
             if unit_amount_decimal is not None:
@@ -2690,9 +2694,8 @@ class Price(StripeObject):
             if billing_scheme == 'tiered':
                 assert tiers is not None and _type(tiers) is list
                 assert tiers_mode in ('graduated', 'volume')
-            if type == 'recurring':
-                if recurring is None:
-                    recurring = {'interval': 'month', 'interval_count': 1}
+            # Validate recurring object if it's a recurring price
+            if recurring is not None:
                 assert _type(recurring) is dict
                 assert 'interval' in recurring
                 assert recurring['interval'] in ('day', 'week', 'month', 'year')
