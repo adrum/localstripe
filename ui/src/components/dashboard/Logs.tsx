@@ -305,17 +305,17 @@ export default function Logs() {
                           {log.status_code}
                         </span>
                         <span className="font-mono text-sm text-gray-900">{log.path}</span>
-                        {log.duration_ms && (
+                        { Object.prototype.hasOwnProperty.call(log, 'duration_ms') && (
                           <span className="text-xs text-gray-500">{log.duration_ms}ms</span>
                         )}
                       </div>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div>
                           <span className="text-gray-600">Time:</span>
                           <span className="ml-2 text-gray-900">{formatDate(log.created)}</span>
                         </div>
-                        
+
                         {log.object_type && log.object_id && (
                           <div>
                             <span className="text-gray-600">Object:</span>
@@ -327,7 +327,7 @@ export default function Logs() {
                             </button>
                           </div>
                         )}
-                        
+
                         {!!log.error && (
                           <div>
                             <span className="text-gray-600">Error:</span>
@@ -353,7 +353,7 @@ export default function Logs() {
                           </div>
                         )}
                       </div>
-                      
+
                       {Object.keys(log.query_params || {}).length > 0 && (
                         <div className="mt-2">
                           <span className="text-sm text-gray-600">Query Params:</span>
@@ -363,7 +363,7 @@ export default function Logs() {
                         </div>
                       )}
                     </div>
-                    
+
                     <Button
                       variant="ghost"
                       size="sm"
@@ -373,26 +373,34 @@ export default function Logs() {
                     </Button>
                   </div>
                 </div>
-                
+
                 {expandedLog === log.id && (
                   <div className="border-t border-gray-200 p-4 bg-gray-50 space-y-4">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      {!!log.request_body && (
+                      {log.request_body ? (
                         <CodeBlock
                           title="Request Body"
                           data={log.request_body as object | string | number | boolean | null}
                           collapsible
                         />
+                      ) : (
+                        <div className="text-sm text-gray-500 border border-gray-200 rounded-md p-2 flex items-center justify-center">
+                          No request body data available
+                        </div>
                       )}
-                      
-                      {!!log.response_body && (
+
+                      {log.response_body ? (
                         <CodeBlock
                           title="Response Body"
                           data={log.response_body as object | string | number | boolean | null}
                           collapsible
                         />
+                      ) : (
+                        <div className="text-sm text-gray-500 border border-gray-200 rounded-md p-2 flex items-center justify-center">
+                          No response body data available
+                        </div>
                       )}
-                      
+
                       {!!log.error && typeof log.error === 'object' && (log.error as APILogError)?.traceback && (
                         <div className="lg:col-span-2">
                           <StackTrace
@@ -402,7 +410,7 @@ export default function Logs() {
                           />
                         </div>
                       )}
-                      
+
                       {!log.request_body && !log.response_body && !log.error && (
                         <div className="text-sm text-gray-500">
                           No request or response body data available
