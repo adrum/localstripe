@@ -211,7 +211,11 @@ async def save_store_middleware(request, handler):
 @web.middleware
 async def api_logging_middleware(request, handler):
     """Log all API requests and responses"""
-    # Skip logging for internal config endpoints and static files
+    # Skip logging for UI requests (identified by custom header)
+    if request.headers.get('X-LocalStripe-UI') == 'true':
+        return await handler(request)
+
+    # Skip logging for internal config endpoints (except api_logs fetching), static files, and UI routes
     if (request.path.startswith('/_config/api_logs') or 
         request.path.startswith('/js.stripe.com/') or
         request.path == '/' or

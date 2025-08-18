@@ -23,6 +23,7 @@ class LocalStripeAPI {
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/x-www-form-urlencoded',
+        'X-LocalStripe-UI': 'true', // Custom header to identify UI requests
         ...options.headers,
       },
     };
