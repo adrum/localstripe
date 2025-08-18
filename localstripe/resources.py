@@ -2628,6 +2628,24 @@ class Product(StripeObject):
 
         return li
 
+    def _update(self, **data):
+        # Handle boolean conversion for Product-specific fields
+        if 'active' in data:
+            data['active'] = try_convert_to_bool(data['active'])
+        if 'shippable' in data:
+            data['shippable'] = try_convert_to_bool(data['shippable'])
+
+        # Validate updated data
+        try:
+            if 'active' in data:
+                assert _type(data['active']) is bool
+            if 'shippable' in data:
+                assert _type(data['shippable']) is bool
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        # Call parent update method
+        super()._update(**data)
 
 class Price(StripeObject):
     object = 'price'
