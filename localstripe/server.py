@@ -34,10 +34,18 @@ from .api_logs import create_api_log, get_api_logs, clear_api_logs
 
 
 def json_response(*args, **kwargs):
-    return web.json_response(
+    response = web.json_response(
         *args,
         dumps=lambda x: json.dumps(x, indent=2, sort_keys=True) + '\n',
         **kwargs)
+
+    # Store response data for logging if available
+    if args and hasattr(response, '_logged_data'):
+        response._logged_data = args[0]
+    elif args:
+        response._logged_data = args[0]
+
+    return response
 
 
 async def add_cors_headers(request, response):
@@ -244,14 +252,23 @@ async def api_logging_middleware(request, handler):
         # Process the request
         response = await handler(request)
 
-        # Log successful response (without interfering with response body)
-        api_log.complete_request(response.status)
+        # Capture response body from our custom json_response function
+        response_body = getattr(response, '_logged_data', None)
+
+        # Log successful response
+        api_log.complete_request(response.status, response_body)
 
         return response
         
     except Exception as e:
-        # Log exception
-        api_log.complete_request(500, error=str(e))
+        # Log exception with detailed information
+        import traceback
+        error_details = {
+            'message': str(e),
+            'type': type(e).__name__,
+            'traceback': traceback.format_exc()
+        }
+        api_log.complete_request(500, error=error_details)
         raise
 
 
