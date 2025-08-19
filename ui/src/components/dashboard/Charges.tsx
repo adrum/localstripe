@@ -124,13 +124,13 @@ export default function Charges() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'succeeded':
-        return 'text-green-600 bg-green-100';
+        return 'text-green-600 bg-green-100 dark:text-green-200 dark:bg-green-900';
       case 'failed':
-        return 'text-red-600 bg-red-100';
+        return 'text-red-600 bg-red-100 dark:text-red-200 dark:bg-red-900';
       case 'pending':
-        return 'text-yellow-600 bg-yellow-100';
+        return 'text-yellow-600 bg-yellow-100 dark:text-yellow-200 dark:bg-yellow-900';
       default:
-        return 'text-gray-600 bg-gray-100';
+        return 'text-gray-600 bg-gray-100 dark:text-gray-200 dark:bg-gray-700';
     }
   };
 
@@ -139,8 +139,8 @@ export default function Charges() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Charges</h1>
-          <p className="text-sm text-gray-600 mt-1">
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Charges</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Monitor charges and payment activity
           </p>
         </div>
@@ -267,45 +267,45 @@ export default function Charges() {
         </CardHeader>
         
         {isLoading ? (
-          <div className="py-8 text-center text-gray-500">Loading charges...</div>
+          <div className="py-8 text-center text-gray-500 dark:text-gray-400">Loading charges...</div>
         ) : charges.length === 0 ? (
-          <div className="py-8 text-center text-gray-500">
-            <div className="mb-4">⚡</div>
+          <div className="py-8 text-center text-gray-500 dark:text-gray-400">
+            <div className="mb-4"><i className="fas fa-bolt text-4xl text-gray-400 dark:text-gray-500"></i></div>
             <p>No charges found</p>
             <p className="text-sm mt-1">Create your first charge to get started</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b border-gray-200">
+              <thead className="border-b border-gray-200 dark:border-gray-700">
                 <tr>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Charge</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Amount</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Customer</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Refunded</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Created</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Charge</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Amount</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Customer</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Status</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Refunded</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Created</th>
                 </tr>
               </thead>
               <tbody>
                 {charges.map((charge) => (
-                  <tr key={charge.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={charge.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="py-3 px-4">
                       <div>
-                        <div className="font-mono text-sm text-gray-900">{charge.id}</div>
+                        <div className="font-mono text-sm text-gray-900 dark:text-white">{charge.id}</div>
                         {charge.description && (
-                          <div className="text-sm text-gray-500">{charge.description}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">{charge.description}</div>
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-4 font-medium text-gray-900">
+                    <td className="py-3 px-4 font-medium text-gray-900 dark:text-white">
                       {formatAmount(charge.amount, charge.currency)}
                     </td>
                     <td className="py-3 px-4">
                       {charge.customer ? (
-                        <div className="font-mono text-sm text-gray-600">{charge.customer}</div>
+                        <div className="font-mono text-sm text-gray-600 dark:text-gray-400">{charge.customer}</div>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span className="text-gray-400 dark:text-gray-500">-</span>
                       )}
                     </td>
                     <td className="py-3 px-4">
@@ -316,18 +316,18 @@ export default function Charges() {
                     <td className="py-3 px-4">
                       {charge.refunded ? (
                         <div className="text-sm">
-                          <span className="text-red-600">
+                          <span className="text-red-600 dark:text-red-400">
                             {formatAmount(charge.amount_refunded, charge.currency)}
                           </span>
                           {charge.amount_refunded < charge.amount && (
-                            <span className="text-gray-500 ml-1">(Partial)</span>
+                            <span className="text-gray-500 dark:text-gray-400 ml-1">(Partial)</span>
                           )}
                         </div>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span className="text-gray-400 dark:text-gray-500">-</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-gray-600">
+                    <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
                       {formatDate(charge.created)}
                     </td>
                   </tr>

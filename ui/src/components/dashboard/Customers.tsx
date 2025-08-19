@@ -130,8 +130,8 @@ export default function Customers() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Customers</h1>
-          <p className="text-sm text-gray-600 mt-1">
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Customers</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Manage your LocalStripe customers
           </p>
         </div>
@@ -223,28 +223,30 @@ export default function Customers() {
         </CardHeader>
         
         {isLoading ? (
-          <div className="py-8 text-center text-gray-500">Loading customers...</div>
+          <div className="py-8 text-center text-gray-500 dark:text-gray-400 dark:text-gray-400">Loading customers...</div>
         ) : customers.length === 0 ? (
-          <div className="py-8 text-center text-gray-500">
-            <div className="mb-4">👥</div>
+          <div className="py-8 text-center text-gray-500 dark:text-gray-400 dark:text-gray-400">
+            <div className="mb-4">
+              <i className="fas fa-users text-4xl text-gray-400 dark:text-gray-500 dark:text-gray-400"></i>
+            </div>
             <p>No customers found</p>
             <p className="text-sm mt-1">Create your first customer to get started</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b border-gray-200">
+              <thead className="border-b border-gray-200 dark:border-gray-700">
                 <tr>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Customer</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Email</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Created</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Balance</th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-600">Actions</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Customer</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Email</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Created</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Balance</th>
+                  <th className="text-right py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {customers.map((customer) => (
-                  <tr key={customer.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={customer.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                     {editingCustomer === customer.id ? (
                       <>
                         <td className="py-3 px-4">
@@ -255,9 +257,10 @@ export default function Customers() {
                                 value={editForm.name}
                                 onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
                                 placeholder="Customer name"
+                                className="bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
                               />
                             </FormField>
-                            <div className="text-sm text-gray-500 font-mono mt-1">{customer.id}</div>
+                            <div className="text-sm text-gray-500 dark:text-gray-400 font-mono mt-1">{customer.id}</div>
                           </div>
                         </td>
                         <td className="py-3 px-4">
@@ -267,18 +270,19 @@ export default function Customers() {
                               value={editForm.email}
                               onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
                               placeholder="customer@example.com"
+                              className="bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
                             />
                           </FormField>
                         </td>
-                        <td className="py-3 px-4 text-gray-600">
+                        <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
                           {formatDate(customer.created)}
                         </td>
                         <td className="py-3 px-4">
                           <span className={`text-sm ${
                             customer.account_balance === 0 
-                              ? 'text-gray-600' 
+                              ? 'text-gray-600 dark:text-gray-400' 
                               : customer.account_balance > 0 
-                                ? 'text-green-600' 
+                                ? 'text-green-600 dark:text-green-400' 
                                 : 'text-red-600'
                           }`}>
                             ${(customer.account_balance / 100).toFixed(2)}
@@ -309,24 +313,24 @@ export default function Customers() {
                       <>
                         <td className="py-3 px-4">
                           <div>
-                            <div className="font-medium text-gray-900">
+                            <div className="font-medium text-gray-900 dark:text-white">
                               {customer.name || 'Unnamed Customer'}
                             </div>
-                            <div className="text-sm text-gray-500 font-mono">{customer.id}</div>
+                            <div className="text-sm text-gray-500 dark:text-gray-400 font-mono">{customer.id}</div>
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-gray-600">
+                        <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
                           {customer.email || '-'}
                         </td>
-                        <td className="py-3 px-4 text-gray-600">
+                        <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
                           {formatDate(customer.created)}
                         </td>
                         <td className="py-3 px-4">
                           <span className={`text-sm ${
                             customer.account_balance === 0 
-                              ? 'text-gray-600' 
+                              ? 'text-gray-600 dark:text-gray-400' 
                               : customer.account_balance > 0 
-                                ? 'text-green-600' 
+                                ? 'text-green-600 dark:text-green-400' 
                                 : 'text-red-600'
                           }`}>
                             ${(customer.account_balance / 100).toFixed(2)}

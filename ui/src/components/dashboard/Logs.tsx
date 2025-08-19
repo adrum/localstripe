@@ -52,7 +52,7 @@ export default function Logs() {
     object_type: '',
     search: '',
   });
-  
+
   // TanStack Query hooks
   const { data: logsData, isLoading, refetch } = useAPILogs({
     limit: 200,
@@ -60,30 +60,30 @@ export default function Logs() {
     status_code: filters.status_code ? parseInt(filters.status_code) : undefined,
     object_type: filters.object_type || undefined,
   });
-  
+
   const clearLogsMutation = useClearAPILogs();
-  
+
   const logs: APILog[] = useMemo(() => logsData?.data || [], [logsData]);
-  
+
   // Filter logs by search term
   const filteredLogs = useMemo(() => {
     if (!filters.search) return logs;
-    
+
     const searchLower = filters.search.toLowerCase();
     return logs.filter(log => {
       const pathMatch = log.path.toLowerCase().includes(searchLower);
       const idMatch = log.object_id?.toLowerCase().includes(searchLower);
       const bodyMatch = JSON.stringify(log.request_body || {}).toLowerCase().includes(searchLower);
       const responseMatch = JSON.stringify(log.response_body || {}).toLowerCase().includes(searchLower);
-      
+
       return pathMatch || idMatch || bodyMatch || responseMatch;
     });
   }, [logs, filters.search]);
-  
+
   const formatDate = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleString();
   };
-  
+
   const getStatusColor = (statusCode: number) => {
     if (statusCode >= 200 && statusCode < 300) return STATUS_COLORS['2xx'];
     if (statusCode >= 300 && statusCode < 400) return STATUS_COLORS['3xx'];
@@ -91,10 +91,10 @@ export default function Logs() {
     if (statusCode >= 500) return STATUS_COLORS['5xx'];
     return 'text-gray-600 bg-gray-100';
   };
-  
+
   const handleObjectClick = (objectType: string | null, objectId: string | null) => {
     if (!objectType || !objectId) return;
-    
+
     // Map object types to routes
     const routeMap: Record<string, string> = {
       customer: '/customers',
@@ -105,37 +105,37 @@ export default function Logs() {
       invoice: '/invoices',
       product: '/products',
     };
-    
+
     const route = routeMap[objectType];
     if (route) {
       // Navigate to the appropriate page with the object ID highlighted
       navigate(`${route}?highlight=${objectId}`);
     }
   };
-  
+
   const clearLogs = async () => {
     if (!confirm('Are you sure you want to clear all API logs? This action cannot be undone.')) {
       return;
     }
-    
+
     try {
       await clearLogsMutation.mutateAsync();
     } catch (error) {
       console.error('Failed to clear logs:', error);
     }
   };
-  
+
   // Extract unique values for filters
   const uniqueMethods = useMemo(() => {
     const methods = new Set(logs.map(log => log.method));
     return Array.from(methods).sort();
   }, [logs]);
-  
+
   const uniqueObjectTypes = useMemo(() => {
     const types = new Set(logs.map(log => log.object_type).filter(Boolean));
     return Array.from(types).sort();
   }, [logs]);
-  
+
   // Calculate stats
   const stats = useMemo(() => {
     const total = filteredLogs.length;
@@ -144,10 +144,10 @@ export default function Logs() {
     const avgDuration = filteredLogs.length > 0
       ? Math.round(filteredLogs.reduce((sum, log) => sum + (log.duration_ms || 0), 0) / filteredLogs.length)
       : 0;
-    
+
     return { total, successful, errors, avgDuration };
   }, [filteredLogs]);
-  
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -167,7 +167,7 @@ export default function Logs() {
           </Button>
         </div>
       </div>
-      
+
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -176,21 +176,21 @@ export default function Logs() {
             <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
           </div>
         </Card>
-        
+
         <Card>
           <div>
             <p className="text-sm font-medium text-gray-600">Successful</p>
             <p className="text-2xl font-bold text-green-600">{stats.successful}</p>
           </div>
         </Card>
-        
+
         <Card>
           <div>
             <p className="text-sm font-medium text-gray-600">Errors</p>
             <p className="text-2xl font-bold text-red-600">{stats.errors}</p>
           </div>
         </Card>
-        
+
         <Card>
           <div>
             <p className="text-sm font-medium text-gray-600">Avg Duration</p>
@@ -198,7 +198,7 @@ export default function Logs() {
           </div>
         </Card>
       </div>
-      
+
       {/* Filters */}
       <Card>
         <CardHeader>
@@ -217,7 +217,7 @@ export default function Logs() {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Method
@@ -232,7 +232,7 @@ export default function Logs() {
               ))}
             </Select>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Status Code
@@ -247,7 +247,7 @@ export default function Logs() {
               <option value="500">5xx - Server Error</option>
             </Select>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Object Type
@@ -264,7 +264,7 @@ export default function Logs() {
           </div>
         </div>
       </Card>
-      
+
       {/* Logs List */}
       <Card>
         <CardHeader>
@@ -277,12 +277,14 @@ export default function Logs() {
             </div>
           </div>
         </CardHeader>
-        
+
         {isLoading ? (
           <div className="py-8 text-center text-gray-500">Loading logs...</div>
         ) : filteredLogs.length === 0 ? (
           <div className="py-8 text-center text-gray-500">
-            <div className="mb-4">📝</div>
+            <div className="mb-4">
+              <i className="fas fa-file-alt text-4xl text-gray-400 dark:text-gray-500"></i>
+            </div>
             <p>No API logs found</p>
             <p className="text-sm mt-1">
               {filters.search || filters.method || filters.status_code || filters.object_type

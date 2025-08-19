@@ -117,19 +117,19 @@ export default function Payments() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'succeeded':
-        return 'text-green-600 bg-green-100';
+        return 'text-green-600 bg-green-100 dark:text-green-200 dark:bg-green-900';
       case 'canceled':
-        return 'text-red-600 bg-red-100';
+        return 'text-red-600 bg-red-100 dark:text-red-200 dark:bg-red-900';
       case 'processing':
-        return 'text-blue-600 bg-blue-100';
+        return 'text-blue-600 bg-blue-100 dark:text-blue-200 dark:bg-blue-900';
       case 'requires_payment_method':
       case 'requires_confirmation':
       case 'requires_action':
-        return 'text-yellow-600 bg-yellow-100';
+        return 'text-yellow-600 bg-yellow-100 dark:text-yellow-200 dark:bg-yellow-900';
       case 'requires_capture':
-        return 'text-purple-600 bg-purple-100';
+        return 'text-purple-600 bg-purple-100 dark:text-purple-200 dark:bg-purple-900';
       default:
-        return 'text-gray-600 bg-gray-100';
+        return 'text-gray-600 bg-gray-100 dark:text-gray-200 dark:bg-gray-700';
     }
   };
 
@@ -138,8 +138,8 @@ export default function Payments() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Payment Intents</h1>
-          <p className="text-sm text-gray-600 mt-1">
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Payment Intents</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Manage payment intents and track payment flow
           </p>
         </div>
@@ -248,44 +248,44 @@ export default function Payments() {
         </CardHeader>
         
         {isLoading ? (
-          <div className="py-8 text-center text-gray-500">Loading payment intents...</div>
+          <div className="py-8 text-center text-gray-500 dark:text-gray-400">Loading payment intents...</div>
         ) : paymentIntents.length === 0 ? (
-          <div className="py-8 text-center text-gray-500">
-            <div className="mb-4">💳</div>
+          <div className="py-8 text-center text-gray-500 dark:text-gray-400">
+            <div className="mb-4"><i className="fas fa-credit-card text-4xl text-gray-400 dark:text-gray-500"></i></div>
             <p>No payment intents found</p>
             <p className="text-sm mt-1">Create your first payment intent to get started</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b border-gray-200">
+              <thead className="border-b border-gray-200 dark:border-gray-700">
                 <tr>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Payment Intent</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Amount</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Customer</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Created</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Payment Intent</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Amount</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Customer</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Status</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Created</th>
                 </tr>
               </thead>
               <tbody>
                 {paymentIntents.map((payment) => (
-                  <tr key={payment.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={payment.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="py-3 px-4">
                       <div>
-                        <div className="font-mono text-sm text-gray-900">{payment.id}</div>
+                        <div className="font-mono text-sm text-gray-900 dark:text-white">{payment.id}</div>
                         {payment.description && (
-                          <div className="text-sm text-gray-500">{payment.description}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">{payment.description}</div>
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-4 font-medium text-gray-900">
+                    <td className="py-3 px-4 font-medium text-gray-900 dark:text-white">
                       {formatAmount(payment.amount, payment.currency)}
                     </td>
                     <td className="py-3 px-4">
                       {payment.customer ? (
-                        <div className="font-mono text-sm text-gray-600">{payment.customer}</div>
+                        <div className="font-mono text-sm text-gray-600 dark:text-gray-400">{payment.customer}</div>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span className="text-gray-400 dark:text-gray-500">-</span>
                       )}
                     </td>
                     <td className="py-3 px-4">
@@ -293,7 +293,7 @@ export default function Payments() {
                         {payment.status.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-gray-600">
+                    <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
                       {formatDate(payment.created)}
                     </td>
                   </tr>

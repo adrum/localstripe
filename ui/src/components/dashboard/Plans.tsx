@@ -124,8 +124,8 @@ export default function Plans() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Plans</h1>
-          <p className="text-sm text-gray-600 mt-1">
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Plans</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Manage subscription plans and pricing
           </p>
         </div>
@@ -254,48 +254,48 @@ export default function Plans() {
         </CardHeader>
         
         {isLoading ? (
-          <div className="py-8 text-center text-gray-500">Loading plans...</div>
+          <div className="py-8 text-center text-gray-500 dark:text-gray-400">Loading plans...</div>
         ) : plans.length === 0 ? (
-          <div className="py-8 text-center text-gray-500">
-            <div className="mb-4">📋</div>
+          <div className="py-8 text-center text-gray-500 dark:text-gray-400">
+            <div className="mb-4"><i className="fas fa-clipboard-list text-4xl text-gray-400 dark:text-gray-500"></i></div>
             <p>No plans found</p>
             <p className="text-sm mt-1">Create your first plan to start offering subscriptions</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b border-gray-200">
+              <thead className="border-b border-gray-200 dark:border-gray-700">
                 <tr>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Plan</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Amount</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Interval</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Created</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Plan</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Amount</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Interval</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Status</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Created</th>
                 </tr>
               </thead>
               <tbody>
                 {plans.map((plan) => (
-                  <tr key={plan.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={plan.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="py-3 px-4">
                       <div>
-                        <div className="font-medium text-gray-900">{plan.name}</div>
-                        <div className="text-sm text-gray-500 font-mono">{plan.id}</div>
+                        <div className="font-medium text-gray-900 dark:text-white">{plan.name}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 font-mono">{plan.id}</div>
                       </div>
                     </td>
-                    <td className="py-3 px-4 font-medium text-gray-900">
+                    <td className="py-3 px-4 font-medium text-gray-900 dark:text-white">
                       {formatAmount(plan.amount, plan.currency)}
                     </td>
-                    <td className="py-3 px-4 text-gray-600">
+                    <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
                       Every {plan.interval_count > 1 ? `${plan.interval_count} ` : ''}{plan.interval}{plan.interval_count > 1 ? 's' : ''}
                     </td>
                     <td className="py-3 px-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        plan.active ? 'text-green-600 bg-green-100' : 'text-gray-600 bg-gray-100'
+                        plan.active ? 'text-green-600 bg-green-100 dark:text-green-200 dark:bg-green-900' : 'text-gray-600 bg-gray-100 dark:text-gray-200 dark:bg-gray-700'
                       }`}>
                         {plan.active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-gray-600">
+                    <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
                       {formatDate(plan.created)}
                     </td>
                   </tr>

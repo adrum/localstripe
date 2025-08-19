@@ -210,13 +210,13 @@ export default function Webhooks() {
 
   const getStatusColor = (statusCode: number) => {
     if (statusCode >= 200 && statusCode < 300) {
-      return 'text-green-600 bg-green-100';
+      return 'text-green-600 bg-green-100 dark:text-green-200 dark:bg-green-900';
     } else if (statusCode >= 400 && statusCode < 500) {
-      return 'text-yellow-600 bg-yellow-100';
+      return 'text-yellow-600 bg-yellow-100 dark:text-yellow-200 dark:bg-yellow-900';
     } else if (statusCode >= 500) {
-      return 'text-red-600 bg-red-100';
+      return 'text-red-600 bg-red-100 dark:text-red-200 dark:bg-red-900';
     } else {
-      return 'text-gray-600 bg-gray-100';
+      return 'text-gray-600 bg-gray-100 dark:text-gray-200 dark:bg-gray-700';
     }
   };
 
@@ -232,8 +232,8 @@ export default function Webhooks() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Webhooks</h1>
-          <p className="text-sm text-gray-600 mt-1">
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Webhooks</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Configure webhook endpoints and monitor delivery logs
           </p>
         </div>
@@ -326,7 +326,7 @@ export default function Webhooks() {
                     label="Events to Subscribe (optional)"
                   >
                     <div className="space-y-2">
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         Select specific events to receive, or leave empty to receive all events:
                       </p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -338,7 +338,7 @@ export default function Webhooks() {
                               onChange={() => handleEventToggle(event)}
                               className="mr-2 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                             />
-                            <span className="text-sm text-gray-700 font-mono">{event}</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300 font-mono">{event}</span>
                           </label>
                         ))}
                       </div>
@@ -374,44 +374,44 @@ export default function Webhooks() {
               </CardHeader>
               
               {isLoading ? (
-                <div className="py-8 text-center text-gray-500">Loading webhooks...</div>
+                <div className="py-8 text-center text-gray-500 dark:text-gray-400">Loading webhooks...</div>
               ) : webhooks.length === 0 ? (
-                <div className="py-8 text-center text-gray-500">
-                  <div className="mb-4">🔗</div>
+                <div className="py-8 text-center text-gray-500 dark:text-gray-400">
+                  <div className="mb-4"><i className="fas fa-link text-4xl text-gray-400 dark:text-gray-500"></i></div>
                   <p>No webhooks configured</p>
                   <p className="text-sm mt-1">Create your first webhook to receive event notifications</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {webhooks.map((webhook) => (
-                    <div key={webhook.id} className="border border-gray-200 rounded-lg p-4">
+                    <div key={webhook.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center space-x-3 mb-2">
-                            <h4 className="font-medium text-gray-900">{webhook.id}</h4>
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <h4 className="font-medium text-gray-900 dark:text-white">{webhook.id}</h4>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                               Active
                             </span>
                           </div>
                           <div className="space-y-1 text-sm">
                             <div>
-                              <span className="text-gray-600">URL:</span>
-                              <span className="ml-2 font-mono text-gray-900">{webhook.url}</span>
+                              <span className="text-gray-600 dark:text-gray-400">URL:</span>
+                              <span className="ml-2 font-mono text-gray-900 dark:text-white">{webhook.url}</span>
                             </div>
                             <div>
-                              <span className="text-gray-600">Secret:</span>
-                              <span className="ml-2 font-mono text-gray-900">
+                              <span className="text-gray-600 dark:text-gray-400">Secret:</span>
+                              <span className="ml-2 font-mono text-gray-900 dark:text-white">
                                 {webhook.secret.substring(0, 15)}...
                               </span>
                             </div>
                             {webhook.events && webhook.events.length > 0 ? (
                               <div>
-                                <span className="text-gray-600">Events:</span>
+                                <span className="text-gray-600 dark:text-gray-400">Events:</span>
                                 <div className="ml-2 mt-1 flex flex-wrap gap-1">
                                   {webhook.events.map((event) => (
                                     <span
                                       key={event}
-                                      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                                      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
                                     >
                                       {event}
                                     </span>
@@ -420,8 +420,8 @@ export default function Webhooks() {
                               </div>
                             ) : (
                               <div>
-                                <span className="text-gray-600">Events:</span>
-                                <span className="ml-2 text-gray-500">All events</span>
+                                <span className="text-gray-600 dark:text-gray-400">Events:</span>
+                                <span className="ml-2 text-gray-500 dark:text-gray-400">All events</span>
                               </div>
                             )}
                           </div>
@@ -506,7 +506,9 @@ export default function Webhooks() {
                 <div className="py-8 text-center text-gray-500">Loading webhook logs...</div>
               ) : webhookLogs.length === 0 ? (
                 <div className="py-8 text-center text-gray-500">
-                  <div className="mb-4">📝</div>
+                  <div className="mb-4">
+                    <i className="fas fa-webhook text-4xl text-gray-400 dark:text-gray-500"></i>
+                  </div>
                   <p>No webhook logs found</p>
                   <p className="text-sm mt-1">Webhook delivery logs will appear here when events are triggered</p>
                 </div>
