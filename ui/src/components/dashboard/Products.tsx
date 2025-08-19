@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
-import { FormField } from '@/components/ui/FormField';
+import { FormField, Input } from '@/components/ui/FormField';
 
 interface Price {
   id: string;
@@ -26,7 +26,7 @@ interface Price {
 interface Product {
   id: string;
   object: string;
-  active: boolean;
+  active: string;
   created: number;
   description: string | null;
   livemode: boolean;
@@ -47,14 +47,14 @@ export default function Products() {
   const [productForm, setProductForm] = useState<Partial<Product>>({});
   const [priceForm, setPriceForm] = useState<{
     nickname?: string;
-    active?: string;
+    active?: boolean;
     metadata?: Record<string, string>;
   }>({});
   const [metadataEntries, setMetadataEntries] = useState<Array<{key: string, value: string}>>([]);
   const [showCreatePrice, setShowCreatePrice] = useState(false);
   const [newPriceForm, setNewPriceForm] = useState({
     nickname: '',
-    unit_amount: '',
+    unit_amount: 0,
     currency: 'usd',
     isRecurring: false,
     recurring: {
@@ -163,15 +163,15 @@ export default function Products() {
   });
 
   const createPriceMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: Partial<Price>) => {
       const params = new URLSearchParams();
       params.append('product', selectedProduct!.id);
-      params.append('currency', data.currency);
-      params.append('unit_amount', data.unit_amount);
+      params.append('currency', data.currency || 'usd');
+      params.append('unit_amount', data.unit_amount?.toString() || '0');
       if (data.nickname) params.append('nickname', data.nickname);
 
       // Only send recurring if it's a recurring price
-      if (data.isRecurring) {
+      if (data.recurring && data.recurring.interval && data.recurring.interval_count) {
         params.append('recurring[interval]', data.recurring.interval);
         params.append('recurring[interval_count]', data.recurring.interval_count.toString());
       }
@@ -191,7 +191,7 @@ export default function Products() {
       setShowCreatePrice(false);
       setNewPriceForm({
         nickname: '',
-        unit_amount: '',
+        unit_amount: 0,
         currency: 'usd',
         isRecurring: false,
         recurring: {
@@ -266,7 +266,7 @@ export default function Products() {
   if (error) {
     return (
       <div className="p-6">
-        <Alert type="error" message="Failed to load products. Please try again." />
+        <Alert variant="error">Failed to load products. Please try again.</Alert>
       </div>
     );
   }
@@ -316,7 +316,7 @@ export default function Products() {
                           url: selectedProduct.url || '',
                           type: selectedProduct.type,
                           caption: selectedProduct.caption || '',
-                          shippable: selectedProduct.shippable?.toString() || 'true',
+                          shippable: selectedProduct.shippable || false,
                         });
                       }}
                     >
@@ -444,8 +444,8 @@ export default function Products() {
                     </label>
                     <select
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      value={productForm.shippable?.toString()}
-                      onChange={(e) => setProductForm({ ...productForm, shippable: e.target.value })}
+                      value={productForm.shippable?.toString() || 'true'}
+                      onChange={(e) => setProductForm({ ...productForm, shippable: e.target.value === 'true' })}
                     >
                       <option value="true">Yes</option>
                       <option value="false">No</option>
@@ -554,19 +554,21 @@ export default function Products() {
                   <div className="border rounded-lg p-4 mb-4 bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
                     <h4 className="font-medium mb-3 text-gray-900 dark:text-white">Create New Price</h4>
                     <div className="space-y-3">
-                      <FormField
-                        label="Nickname (optional)"
-                        value={newPriceForm.nickname}
-                        onChange={(e) => setNewPriceForm({ ...newPriceForm, nickname: e.target.value })}
-                      />
-                      <div className="grid grid-cols-2 gap-3">
-                        <FormField
-                          label="Amount (in cents)"
-                          type="number"
-                          value={newPriceForm.unit_amount}
-                          onChange={(e) => setNewPriceForm({ ...newPriceForm, unit_amount: e.target.value })}
-                          helper="e.g., 1000 = $10.00"
+                      <FormField label="Nickname (optional)">
+                        <Input
+                          value={newPriceForm.nickname || ''}
+                          onChange={(e) => setNewPriceForm({ ...newPriceForm, nickname: e.target.value })}
                         />
+                      </FormField>
+                      <div className="grid grid-cols-2 gap-3">
+                        <FormField label="Amount (in cents)">
+                          <Input
+                            type="number"
+                            value={newPriceForm.unit_amount || 0}
+                            onChange={(e) => setNewPriceForm({ ...newPriceForm, unit_amount: parseInt(e.target.value) || 0 })}
+                            placeholder="e.g., 1000 = $10.00"
+                          />
+                        </FormField>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Currency
@@ -615,15 +617,16 @@ export default function Products() {
                               <option value="year">Yearly</option>
                             </select>
                           </div>
-                          <FormField
-                            label="Interval Count"
-                            type="number"
-                            value={newPriceForm.recurring.interval_count.toString()}
-                            onChange={(e) => setNewPriceForm({
-                              ...newPriceForm,
-                              recurring: { ...newPriceForm.recurring, interval_count: parseInt(e.target.value) || 1 }
-                            })}
-                          />
+                          <FormField label="Interval Count">
+                            <Input
+                              type="number"
+                              value={newPriceForm.recurring.interval_count.toString()}
+                              onChange={(e) => setNewPriceForm({
+                                ...newPriceForm,
+                                recurring: { ...newPriceForm.recurring, interval_count: parseInt(e.target.value) || 1 }
+                              })}
+                            />
+                          </FormField>
                         </div>
                       )}
                       <div className="flex gap-2">
@@ -673,8 +676,8 @@ export default function Products() {
                                   </label>
                                   <select
                                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                    value={priceForm.active}
-                                    onChange={(e) => setPriceForm({ ...priceForm, active: e.target.value })}
+                                    value={priceForm.active?.toString() || 'true'}
+                                    onChange={(e) => setPriceForm({ ...priceForm, active: e.target.value === 'true' })}
                                   >
                                     <option value="true">Active</option>
                                     <option value="false">Inactive</option>
@@ -749,10 +752,10 @@ export default function Products() {
                                       }
                                       return acc;
                                     }, {} as Record<string, string>);
-                                    
-                                    updatePriceMutation.mutate({ 
-                                      priceId: price.id, 
-                                      data: { ...priceForm, metadata } 
+
+                                    updatePriceMutation.mutate({
+                                      priceId: price.id,
+                                      data: { ...priceForm, metadata }
                                     });
                                   }}
                                   disabled={updatePriceMutation.isPending}
@@ -821,7 +824,7 @@ export default function Products() {
                                     setEditingPrice(price.id);
                                     setPriceForm({
                                       nickname: price.nickname || '',
-                                      active: price.active.toString(),
+                                      active: price.active,
                                     });
                                     // Convert metadata object to array for editing
                                     const metadataArray = Object.entries(price.metadata || {}).map(([key, value]) => ({
