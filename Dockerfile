@@ -1,18 +1,21 @@
 # Multi-stage build: First stage for building the UI
 FROM node:22-alpine AS ui-builder
 
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
 # Set working directory for UI build
 WORKDIR /app/ui
 
 # Copy UI package files
-COPY ui/package*.json ./
-RUN npm ci
+COPY ui/package.json ui/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 # Copy UI source code
 COPY ui/ ./
 
 # Build the UI for production
-RUN npm run build
+RUN pnpm run build
 
 # Second stage: Python runtime with LocalStripe
 FROM python:3-slim
