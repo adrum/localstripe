@@ -27,6 +27,7 @@ Features
   that can mock Stripe Elements on any webpage, allowing you to create tokens
   on the fake server, from your webpage
 - **supports webhooks** that you can customize using a special API route
+- **has a UI** to manage the state of the server
 
 Limitations
 -----------
@@ -39,33 +40,20 @@ Limitations
 Get started
 -----------
 
-Install localstripe:
+Launch a container using `the Docker image
+<https://github.com/adrum/localstripe/pkgs/container/localstripe>`_:
 
-.. code:: shell
+.. code:: yaml
 
- pip install --user -U localstripe
- # or, to install globally:
- sudo pip install localstripe
+    services:
+      localstripe:
+        image: ghcr.io/adrum/localstripe:latest
+        ports:
+          - 8420:8420
+        restart: always
+        volumes:
+          - ./data:/data
 
-Then simply run the command ``localstripe``. The fake Stripe server is now
-listening on port 8420.
-
-Or launch a container using `the Docker image
-<https://hub.docker.com/r/adrienverge/localstripe/>`_:
-
-.. code:: shell
-
- docker run -p 8420:8420 adrienverge/localstripe:latest
-
-Docker image can be rebuilt using:
-
-.. code::
-
- docker build --no-cache -t adrienverge/localstripe -<<EOF
- FROM python:3
- RUN pip install localstripe
- CMD ["localstripe"]
- EOF
 
 Examples
 --------
