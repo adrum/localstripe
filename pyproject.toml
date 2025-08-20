@@ -54,6 +54,7 @@ line-length = 79
 [tool.ruff.lint]
 fixable = ["ALL"]
 unfixable = []
+ignore = ["E203"]
 
 [tool.ruff.format]
 quote-style = "single"
