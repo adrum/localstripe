@@ -91,14 +91,14 @@ async def _send_webhook(event, max_retries=3):
         headers = {
             'Content-Type': 'application/json; charset=utf-8',
             'Stripe-Signature': 't=%d,v1=%s' % (event.created, signature)}
-        
+
         # Try delivery with retries
         for attempt in range(1, max_retries + 1):
             webhook_log = WebhookLog(webhook_id, event, webhook.url, attempt)
             _webhook_logs.append(webhook_log)
-            
+
             start_time = time.time()
-            
+
             try:
                 timeout = aiohttp.ClientTimeout(total=30)  # 30 second timeout
                 async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -107,7 +107,7 @@ async def _send_webhook(event, max_retries=3):
                         end_time = time.time()
                         webhook_log.response_time_ms = int((end_time - start_time) * 1000)
                         webhook_log.status_code = r.status
-                        
+
                         try:
                             response_text = await r.text()
                             if response_text:
@@ -119,7 +119,7 @@ async def _send_webhook(event, max_retries=3):
                                 webhook_log.response_data = None
                         except Exception:
                             webhook_log.response_data = None
-                        
+
                         if r.status >= 200 and r.status < 300:
                             logger.info('webhook "%s" successfully delivered to %s (attempt %d)'
                                         % (event.type, webhook.url, attempt))
@@ -128,45 +128,45 @@ async def _send_webhook(event, max_retries=3):
                             webhook_log.error_message = f'HTTP {r.status}'
                             logger.info('webhook "%s" failed with response code %d (attempt %d)'
                                         % (event.type, r.status, attempt))
-                            
+
                             if attempt < max_retries:
                                 # Schedule retry with exponential backoff
                                 retry_delay = 2 ** attempt  # 2, 4, 8 seconds
                                 webhook_log.retry_at = int(time.time() + retry_delay)
                                 await asyncio.sleep(retry_delay)
-                            
+
             except asyncio.TimeoutError:
                 end_time = time.time()
                 webhook_log.response_time_ms = int((end_time - start_time) * 1000)
                 webhook_log.status_code = 0
                 webhook_log.error_message = 'Request timeout'
                 logger.info('webhook "%s" timed out (attempt %d)' % (event.type, attempt))
-                
+
                 if attempt < max_retries:
                     retry_delay = 2 ** attempt
                     webhook_log.retry_at = int(time.time() + retry_delay)
                     await asyncio.sleep(retry_delay)
-                    
+
             except aiohttp.client_exceptions.ClientError as e:
                 end_time = time.time()
                 webhook_log.response_time_ms = int((end_time - start_time) * 1000)
                 webhook_log.status_code = 0
                 webhook_log.error_message = str(e)
                 logger.info('webhook "%s" failed: %s (attempt %d)' % (event.type, e, attempt))
-                
+
                 if attempt < max_retries:
                     retry_delay = 2 ** attempt
                     webhook_log.retry_at = int(time.time() + retry_delay)
                     await asyncio.sleep(retry_delay)
-            
+
             except Exception as e:
                 end_time = time.time()
                 webhook_log.response_time_ms = int((end_time - start_time) * 1000)
                 webhook_log.status_code = 0
                 webhook_log.error_message = f'Unexpected error: {str(e)}'
-                logger.error('webhook "%s" failed with unexpected error: %s (attempt %d)' 
-                            % (event.type, e, attempt))
-                
+                logger.error('webhook "%s" failed with unexpected error: %s (attempt %d)'
+                             % (event.type, e, attempt))
+
                 if attempt < max_retries:
                     retry_delay = 2 ** attempt
                     webhook_log.retry_at = int(time.time() + retry_delay)

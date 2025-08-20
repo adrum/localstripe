@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import json
 import time
 import uuid
 from collections import deque
@@ -38,20 +37,20 @@ class APILog:
         self.error = None
         self.object_id = None
         self.object_type = None
-        
+
         # Extract object information from path
         self._extract_object_info()
-    
+
     def _extract_object_info(self):
         """Extract object type and ID from the API path"""
         path_parts = self.path.strip('/').split('/')
-        
+
         if len(path_parts) >= 2 and path_parts[0] == 'v1':
             # Handle paths like /v1/customers/cus_123
             if len(path_parts) == 3:
                 object_type = path_parts[1]
                 object_id = path_parts[2]
-                
+
                 # Map plural to singular
                 type_map = {
                     'customers': 'customer',
@@ -74,10 +73,10 @@ class APILog:
                     'invoice_items': 'invoice_item',
                     'subscription_items': 'subscription_item'
                 }
-                
+
                 self.object_type = type_map.get(object_type, object_type.rstrip('s'))
                 self.object_id = object_id
-            
+
             # Handle creation paths like /v1/customers (POST)
             elif len(path_parts) == 2 and self.method == 'POST':
                 object_type = path_parts[1]
@@ -100,24 +99,24 @@ class APILog:
                     'subscription_items': 'subscription_item'
                 }
                 self.object_type = type_map.get(object_type, object_type.rstrip('s'))
-    
+
     def complete_request(self, status_code, response_body=None, error=None):
         """Complete the API log with response information"""
         self.status_code = status_code
         self.response_body = response_body
         self.error = error
         self.duration_ms = int((time.time() - self.request_time) * 1000)
-        
+
         # If we created an object, extract its ID from the response
-        if (self.method == 'POST' and 
-            self.status_code in (200, 201) and 
-            response_body and 
-            isinstance(response_body, dict)):
+        if (self.method == 'POST' and
+                self.status_code in (200, 201) and
+                response_body and
+                isinstance(response_body, dict)):
             if 'id' in response_body:
                 self.object_id = response_body['id']
             if 'object' in response_body:
                 self.object_type = response_body['object']
-    
+
     def to_dict(self):
         """Convert the API log to a dictionary"""
         return {
@@ -147,7 +146,7 @@ def get_api_logs(limit=100, offset=0, method=None, status_code=None, object_type
     """Retrieve API logs with optional filtering"""
     # Convert deque to list for filtering
     logs = list(_api_logs)
-    
+
     # Apply filters
     if method:
         logs = [log for log in logs if log.method == method]
@@ -157,14 +156,14 @@ def get_api_logs(limit=100, offset=0, method=None, status_code=None, object_type
         logs = [log for log in logs if log.object_type == object_type]
     if object_id:
         logs = [log for log in logs if log.object_id == object_id]
-    
+
     # Sort by creation time (newest first)
     logs.sort(key=lambda x: x.created, reverse=True)
-    
+
     # Apply pagination
     total_count = len(logs)
     logs = logs[offset:offset + limit]
-    
+
     return {
         'object': 'list',
         'data': [log.to_dict() for log in logs],

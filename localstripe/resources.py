@@ -2652,6 +2652,7 @@ class Product(StripeObject):
         # Call parent update method
         super()._update(**data)
 
+
 class Price(StripeObject):
     object = 'price'
     _id_prefix = 'price_'
@@ -2867,7 +2868,7 @@ class Price(StripeObject):
             except (ValueError, TypeError):
                 start_idx = 0
 
-        prices = all_prices[start_idx : start_idx + limit]
+        prices = all_prices[start_idx:start_idx + limit]
 
         # Create a SearchResult as a List object
         result = List('/v1/prices/search')

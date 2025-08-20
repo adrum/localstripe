@@ -26,10 +26,10 @@ from aiohttp import web
 
 from .resources import BalanceTransaction, Charge, Coupon, Customer, Event, \
     Invoice, InvoiceItem, PaymentIntent, PaymentMethod, Payout, Plan, \
-    Price,Product, Refund, SetupIntent, Source, Subscription, SubscriptionItem, \
+    Price, Product, Refund, SetupIntent, Source, Subscription, SubscriptionItem, \
     TaxRate, Token, extra_apis, store
 from .errors import UserError
-from .webhooks import register_webhook, _webhook_logs, _send_webhook
+from .webhooks import register_webhook, _webhook_logs
 from .api_logs import create_api_log, get_api_logs, clear_api_logs
 
 
@@ -174,7 +174,7 @@ async def auth_middleware(request, handler):
         or request.path == '/'
         or request.path.startswith('/assets/')
         or request.path.endswith(
-            ('.js','.css','.html','.svg','.png','.jpg','.ico','.woff','.woff2','.ttf')
+            ('.js', '.css', '.html', '.svg', '.png', '.jpg', '.ico', '.woff', '.woff2', '.ttf')
         )
     ):
         is_auth = True
@@ -228,25 +228,25 @@ async def api_logging_middleware(request, handler):
         return await handler(request)
 
     # Skip logging for internal config endpoints (except api_logs fetching), static files, and UI routes
-    if (request.path.startswith('/_config/api_logs') or 
-        request.path.startswith('/_config/webhooks') or
-        request.path.startswith('/_config/data') or
-        request.path.startswith('/js.stripe.com/') or
-        request.path == '/' or
-        request.path.startswith('/assets/') or
-        request.path.endswith(('.js', '.css', '.html', '.svg', '.png', '.jpg', '.ico', '.woff', '.woff2', '.ttf'))):
+    if (request.path.startswith('/_config/api_logs') or
+            request.path.startswith('/_config/webhooks') or
+            request.path.startswith('/_config/data') or
+            request.path.startswith('/js.stripe.com/') or
+            request.path == '/' or
+            request.path.startswith('/assets/') or
+            request.path.endswith(('.js', '.css', '.html', '.svg', '.png', '.jpg', '.ico', '.woff', '.woff2', '.ttf'))):
         return await handler(request)
-    
+
     # Get request data
     query_params = dict(request.query)
     request_body = None
-    
+
     if request.method in ('POST', 'PUT', 'PATCH'):
         try:
             request_body = await get_post_data(request, remove_auth=False)
-        except:
+        except Exception:
             request_body = None
-    
+
     # Create log entry
     api_log = create_api_log(
         method=request.method,
@@ -254,7 +254,7 @@ async def api_logging_middleware(request, handler):
         query_params=query_params,
         request_body=request_body
     )
-    
+
     try:
         # Process the request
         response = await handler(request)
@@ -266,7 +266,7 @@ async def api_logging_middleware(request, handler):
         api_log.complete_request(response.status, response_body)
 
         return response
-        
+
     except Exception as e:
         # Log exception with detailed information
         import traceback
@@ -400,16 +400,16 @@ async def get_webhook_logs(request):
     data = unflatten_data(request.query)
     limit = int(data.get('limit', 50))
     offset = int(data.get('offset', 0))
-    
+
     # Sort logs by creation time (newest first)
     sorted_logs = sorted(_webhook_logs, key=lambda x: x.created, reverse=True)
-    
+
     # Apply pagination
     paginated_logs = sorted_logs[offset:offset + limit]
-    
+
     # Convert to dict format
     logs_data = [log.to_dict() for log in paginated_logs]
-    
+
     return json_response({
         'object': 'list',
         'data': logs_data,
@@ -428,7 +428,7 @@ async def delete_webhook_config(request):
     """Delete a webhook configuration"""
     webhook_id = request.match_info['id']
     from .webhooks import _webhooks
-    
+
     if webhook_id in _webhooks:
         del _webhooks[webhook_id]
         return web.Response()
@@ -439,17 +439,17 @@ async def delete_webhook_config(request):
 async def retry_webhook(request):
     """Retry a failed webhook delivery"""
     log_id = request.match_info['log_id']
-    
+
     # Find the webhook log
     webhook_log = None
     for log in _webhook_logs:
         if log.id == log_id:
             webhook_log = log
             break
-    
+
     if not webhook_log:
         raise UserError(404, 'Webhook log not found')
-    
+
     # Find the original event to retry
     try:
         event = Event._api_retrieve(webhook_log.event_id)
@@ -464,7 +464,7 @@ async def retry_webhook(request):
 async def get_api_logs_endpoint(request):
     """Retrieve API logs with optional filtering"""
     data = unflatten_data(request.query)
-    
+
     # Extract query parameters
     limit = int(data.get('limit', 100))
     offset = int(data.get('offset', 0))
@@ -472,7 +472,7 @@ async def get_api_logs_endpoint(request):
     status_code = int(data.get('status_code')) if 'status_code' in data else None
     object_type = data.get('object_type', None)
     object_id = data.get('object_id', None)
-    
+
     # Get filtered logs
     logs = get_api_logs(
         limit=limit,
@@ -482,7 +482,7 @@ async def get_api_logs_endpoint(request):
         object_type=object_type,
         object_id=object_id
     )
-    
+
     return json_response(logs)
 
 
