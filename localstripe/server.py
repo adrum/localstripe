@@ -55,7 +55,9 @@ from .api_logs import create_api_log, get_api_logs, clear_api_logs
 
 def json_response(*args, **kwargs):
     response = web.json_response(
-        *args, dumps=lambda x: json.dumps(x, indent=2, sort_keys=True) + '\n', **kwargs
+        *args,
+        dumps=lambda x: json.dumps(x, indent=2, sort_keys=True) + '\n',
+        **kwargs,
     )
 
     # Store response data for logging if available
@@ -117,7 +119,8 @@ def unflatten_data(multidict):
         for k in multidict.keys():
             values = multidict.getall(k)
             values = [
-                handle_multiple_keys(v) if hasattr(v, 'keys') else v for v in values
+                handle_multiple_keys(v) if hasattr(v, 'keys') else v
+                for v in values
             ]
             if len(k) > 2 and k.endswith('[]'):
                 k = k[:-2]
@@ -145,7 +148,9 @@ def unflatten_data(multidict):
     # Transform `{'items': {'0': {'plan': 'pro-yearly'}}}` into
     # `{'items': [{'plan': 'pro-yearly'}]}`
     def transform_lists(data):
-        if len(data) > 0 and all([re.match(r'^[0-9]+$', k) for k in data.keys()]):
+        if len(data) > 0 and all(
+            [re.match(r'^[0-9]+$', k) for k in data.keys()]
+        ):
             new_data = [(int(k), v) for k, v in data.items()]
             new_data.sort(key=lambda k: int(k[0]))
             data = []
@@ -369,7 +374,9 @@ def api_update(cls, url):
         if not data:
             raise UserError(400, 'Bad request')
         expand = data.pop('expand', None)
-        return json_response(cls._api_update(id, **data)._export(expand=expand))
+        return json_response(
+            cls._api_update(id, **data)._export(expand=expand)
+        )
 
     return f
 
@@ -386,7 +393,9 @@ def api_list_all(cls, url):
     def f(request):
         data = unflatten_data(request.query)
         expand = data.pop('expand', None)
-        return json_response(cls._api_list_all(url, **data)._export(expand=expand))
+        return json_response(
+            cls._api_list_all(url, **data)._export(expand=expand)
+        )
 
     return f
 
@@ -450,7 +459,9 @@ for cls in (
 def localstripe_js(request):
     path = os.path.dirname(os.path.realpath(__file__)) + '/localstripe-v3.js'
     with open(path) as f:
-        return web.Response(text=f.read(), content_type='application/javascript')
+        return web.Response(
+            text=f.read(), content_type='application/javascript'
+        )
 
 
 app.router.add_get('/js.stripe.com/v3/', localstripe_js)
@@ -553,7 +564,9 @@ async def get_api_logs_endpoint(request):
     limit = int(data.get('limit', 100))
     offset = int(data.get('offset', 0))
     method = data.get('method', None)
-    status_code = int(data.get('status_code')) if 'status_code' in data else None
+    status_code = (
+        int(data.get('status_code')) if 'status_code' in data else None
+    )
     object_type = data.get('object_type', None)
     object_id = data.get('object_id', None)
 
@@ -619,7 +632,9 @@ def setup_static_routes():
     app.router.add_get('/', serve_index)
 
     # Add static file serving for all other static assets
-    app.router.add_static('/assets', os.path.join(static_path, 'assets'), name='assets')
+    app.router.add_static(
+        '/assets', os.path.join(static_path, 'assets'), name='assets'
+    )
 
     # Add fallback for SPA routing - serve index.html for any unmatched routes
     async def spa_handler(request):

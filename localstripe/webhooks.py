@@ -143,16 +143,21 @@ async def _send_webhook(event, max_retries=3):
                             if attempt < max_retries:
                                 # Schedule retry with exponential backoff
                                 retry_delay = 2**attempt  # 2, 4, 8 seconds
-                                webhook_log.retry_at = int(time.time() + retry_delay)
+                                webhook_log.retry_at = int(
+                                    time.time() + retry_delay
+                                )
                                 await asyncio.sleep(retry_delay)
 
             except asyncio.TimeoutError:
                 end_time = time.time()
-                webhook_log.response_time_ms = int((end_time - start_time) * 1000)
+                webhook_log.response_time_ms = int(
+                    (end_time - start_time) * 1000
+                )
                 webhook_log.status_code = 0
                 webhook_log.error_message = 'Request timeout'
                 logger.info(
-                    'webhook "%s" timed out (attempt %d)' % (event.type, attempt)
+                    'webhook "%s" timed out (attempt %d)'
+                    % (event.type, attempt)
                 )
 
                 if attempt < max_retries:
@@ -162,11 +167,14 @@ async def _send_webhook(event, max_retries=3):
 
             except aiohttp.client_exceptions.ClientError as e:
                 end_time = time.time()
-                webhook_log.response_time_ms = int((end_time - start_time) * 1000)
+                webhook_log.response_time_ms = int(
+                    (end_time - start_time) * 1000
+                )
                 webhook_log.status_code = 0
                 webhook_log.error_message = str(e)
                 logger.info(
-                    'webhook "%s" failed: %s (attempt %d)' % (event.type, e, attempt)
+                    'webhook "%s" failed: %s (attempt %d)'
+                    % (event.type, e, attempt)
                 )
 
                 if attempt < max_retries:
@@ -176,7 +184,9 @@ async def _send_webhook(event, max_retries=3):
 
             except Exception as e:
                 end_time = time.time()
-                webhook_log.response_time_ms = int((end_time - start_time) * 1000)
+                webhook_log.response_time_ms = int(
+                    (end_time - start_time) * 1000
+                )
                 webhook_log.status_code = 0
                 webhook_log.error_message = f'Unexpected error: {str(e)}'
                 logger.error(

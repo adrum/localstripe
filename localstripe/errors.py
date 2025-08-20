@@ -20,7 +20,9 @@ from aiohttp import web
 
 def json_response(*args, **kwargs):
     return web.json_response(
-        *args, dumps=lambda x: json.dumps(x, indent=2, sort_keys=True) + '\n', **kwargs
+        *args,
+        dumps=lambda x: json.dumps(x, indent=2, sort_keys=True) + '\n',
+        **kwargs,
     )
 
 

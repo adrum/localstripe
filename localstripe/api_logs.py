@@ -74,7 +74,9 @@ class APILog:
                     'subscription_items': 'subscription_item',
                 }
 
-                self.object_type = type_map.get(object_type, object_type.rstrip('s'))
+                self.object_type = type_map.get(
+                    object_type, object_type.rstrip('s')
+                )
                 self.object_id = object_id
 
             # Handle creation paths like /v1/customers (POST)
@@ -98,7 +100,9 @@ class APILog:
                     'invoice_items': 'invoice_item',
                     'subscription_items': 'subscription_item',
                 }
-                self.object_type = type_map.get(object_type, object_type.rstrip('s'))
+                self.object_type = type_map.get(
+                    object_type, object_type.rstrip('s')
+                )
 
     def complete_request(self, status_code, response_body=None, error=None):
         """Complete the API log with response information"""
@@ -145,7 +149,12 @@ def create_api_log(method, path, query_params=None, request_body=None):
 
 
 def get_api_logs(
-    limit=100, offset=0, method=None, status_code=None, object_type=None, object_id=None
+    limit=100,
+    offset=0,
+    method=None,
+    status_code=None,
+    object_type=None,
+    object_id=None,
 ):
     """Retrieve API logs with optional filtering"""
     # Convert deque to list for filtering

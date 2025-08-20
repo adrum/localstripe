@@ -181,7 +181,9 @@ class StripeObject(object):
 
         li = List(url, limit=limit, starting_after=starting_after)
         li._list = [
-            value for key, value in store.items() if key.startswith(cls.object + ':')
+            value
+            for key, value in store.items()
+            if key.startswith(cls.object + ':')
         ]
         return li
 
@@ -211,7 +213,9 @@ class StripeObject(object):
             raise UserError(400, 'Bad request')
 
         if any(len(path.split('.')) > 4 for path in expand):
-            raise UserError(400, 'You cannot expand more than 4 levels of a property')
+            raise UserError(
+                400, 'You cannot expand more than 4 levels of a property'
+            )
 
         obj = {}
 
@@ -280,7 +284,11 @@ class Balance(object):
             'currency': 'eur',
             'source_types': {'card': 2000},
         }
-        self.pending = {'amount': 0, 'currency': 'eur', 'source_types': {'card': 0}}
+        self.pending = {
+            'amount': 0,
+            'currency': 'eur',
+            'source_types': {'card': 0},
+        }
 
         store[self.object] = self
 
@@ -602,7 +610,9 @@ class Charge(StripeObject):
 
     def _raise_failure(self):
         raise UserError(
-            402, self.failure_message, {'code': self.failure_code, 'charge': self.id}
+            402,
+            self.failure_message,
+            {'code': self.failure_code, 'charge': self.id},
         )
 
     def _initialize_charge(
@@ -693,12 +703,9 @@ class Charge(StripeObject):
             if created is not None:
                 assert type(created) in (dict, str)
                 if type(created) is dict:
-                    assert len(created.keys()) == 1 and list(created.keys())[0] in (
-                        'gt',
-                        'gte',
-                        'lt',
-                        'lte',
-                    )
+                    assert len(created.keys()) == 1 and list(created.keys())[
+                        0
+                    ] in ('gt', 'gte', 'lt', 'lte')
                     date = try_convert_to_int(list(created.values())[0])
                 elif type(created) is str:
                     date = try_convert_to_int(created)
@@ -720,7 +727,9 @@ class Charge(StripeObject):
             li._list = [c for c in li._list if c.customer == customer]
         if created and created.get('gt'):
             li._list = [
-                c for c in li._list if c.created > try_convert_to_int(created['gt'])
+                c
+                for c in li._list
+                if c.created > try_convert_to_int(created['gt'])
             ]
         return li
 
@@ -816,7 +825,14 @@ class Customer(StripeObject):
             if address is not None:
                 assert type(address) is dict
                 assert set(address.keys()).issubset(
-                    {'city', 'country', 'line1', 'line2', 'postal_code', 'state'}
+                    {
+                        'city',
+                        'country',
+                        'line1',
+                        'line2',
+                        'postal_code',
+                        'state',
+                    }
                 )
                 assert all(type(f) is str for f in address.values())
             if invoice_settings is None:
@@ -826,7 +842,9 @@ class Customer(StripeObject):
                 invoice_settings['default_payment_method'] = None
             if invoice_settings['default_payment_method'] is not None:
                 assert type(invoice_settings['default_payment_method']) is str
-                assert invoice_settings['default_payment_method'].startswith('pm_')
+                assert invoice_settings['default_payment_method'].startswith(
+                    'pm_'
+                )
             if business_vat_id is not None:
                 assert type(business_vat_id) is str
             if preferred_locales is not None:
@@ -877,7 +895,9 @@ class Customer(StripeObject):
 
         self.sources = List('/v1/customers/' + self.id + '/sources')
         self.tax_ids = List('/v1/customers/' + self.id + '/tax_ids')
-        self.tax_ids._list = [TaxId(customer=self.id, **data) for data in tax_id_data]
+        self.tax_ids._list = [
+            TaxId(customer=self.id, **data) for data in tax_id_data
+        ]
 
         schedule_webhook(Event('customer.created', self))
 
@@ -887,7 +907,9 @@ class Customer(StripeObject):
                 self.invoice_settings['default_payment_method']
             )
         elif self.default_source:
-            return [s for s in self.sources._list if s.id == self.default_source][0]
+            return [
+                s for s in self.sources._list if s.id == self.default_source
+            ][0]
 
     @property
     def currency(self):
@@ -976,7 +998,9 @@ class Customer(StripeObject):
             source_obj = Card(source=source)
 
         if source_obj._attaching_is_declined():
-            raise UserError(402, 'Your card was declined.', {'code': 'card_declined'})
+            raise UserError(
+                402, 'Your card was declined.', {'code': 'card_declined'}
+            )
 
         if isinstance(source_obj, Card):
             source_obj.customer = id
@@ -1087,7 +1111,9 @@ class Customer(StripeObject):
         return li
 
     @classmethod
-    def _api_list_all(cls, url, email=None, limit=None, starting_after=None, **kwargs):
+    def _api_list_all(
+        cls, url, email=None, limit=None, starting_after=None, **kwargs
+    ):
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
@@ -1150,15 +1176,27 @@ extra_apis.extend(
             Customer._api_retrieve_source,
         ),
         # Update single source by id:
-        ('POST', '/v1/customers/{id}/sources/{source_id}', Customer._api_update_source),
+        (
+            'POST',
+            '/v1/customers/{id}/sources/{source_id}',
+            Customer._api_update_source,
+        ),
         # Delete single source by id:
         (
             'DELETE',
             '/v1/customers/{id}/sources/{source_id}',
             Customer._api_remove_source,
         ),
-        ('GET', '/v1/customers/{id}/subscriptions', Customer._api_list_subscriptions),
-        ('POST', '/v1/customers/{id}/subscriptions', Customer._api_add_subscription),
+        (
+            'GET',
+            '/v1/customers/{id}/subscriptions',
+            Customer._api_list_subscriptions,
+        ),
+        (
+            'POST',
+            '/v1/customers/{id}/subscriptions',
+            Customer._api_add_subscription,
+        ),
         (
             'GET',
             '/v1/customers/{id}/subscriptions/{subscription_id}',
@@ -1172,9 +1210,17 @@ extra_apis.extend(
         # This is the old API route:
         ('POST', '/v1/customers/{id}/cards', Customer._api_add_source),
         ('GET', '/v1/customers/{id}/tax_ids', Customer._api_list_tax_ids),
-        ('GET', '/v1/customers/{id}/tax_ids/{tax_id}', Customer._api_retrieve_tax_id),
+        (
+            'GET',
+            '/v1/customers/{id}/tax_ids/{tax_id}',
+            Customer._api_retrieve_tax_id,
+        ),
         ('POST', '/v1/customers/{id}/tax_ids', Customer._api_add_tax_id),
-        ('DELETE', '/v1/customers/{id}/tax_ids/{tax_id}', Customer._api_delete_tax_id),
+        (
+            'DELETE',
+            '/v1/customers/{id}/tax_ids/{tax_id}',
+            Customer._api_delete_tax_id,
+        ),
     )
 )
 
@@ -1205,7 +1251,13 @@ class Event(StripeObject):
 
     @classmethod
     def _api_list_all(
-        cls, url, type=None, created=None, limit=None, starting_after=None, **kwargs
+        cls,
+        url,
+        type=None,
+        created=None,
+        limit=None,
+        starting_after=None,
+        **kwargs,
     ):
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
@@ -1237,7 +1289,9 @@ class Event(StripeObject):
         except AssertionError:
             raise UserError(400, 'Bad request')
 
-        li = super()._api_list_all(url, limit=limit, starting_after=starting_after)
+        li = super()._api_list_all(
+            url, limit=limit, starting_after=starting_after
+        )
 
         li._list = [obj for obj in li._list if all(f(obj) for f in filters)]
 
@@ -1298,7 +1352,9 @@ class Invoice(StripeObject):
             subscription_obj = Subscription._api_retrieve(subscription)
 
         if default_tax_rates is not None:
-            default_tax_rates = [TaxRate._api_retrieve(tr) for tr in default_tax_rates]
+            default_tax_rates = [
+                TaxRate._api_retrieve(tr) for tr in default_tax_rates
+            ]
 
         # All exceptions must be raised before this point.
         super().__init__()
@@ -1359,7 +1415,9 @@ class Invoice(StripeObject):
         self._draft = True
         self._voided = False
 
-        self.ending_balance = max(0, cus.account_balance - self.subtotal - self.tax)
+        self.ending_balance = max(
+            0, cus.account_balance - self.subtotal - self.tax
+        )
 
         if not simulation and not upcoming:
             if subscription is not None:
@@ -1490,7 +1548,9 @@ class Invoice(StripeObject):
         subscription_trial_end=None,
         pending_invoice_items_behavior=None,
     ):
-        subscription_proration_date = try_convert_to_int(subscription_proration_date)
+        subscription_proration_date = try_convert_to_int(
+            subscription_proration_date
+        )
         try:
             assert type(customer) is str and customer.startswith('cus_')
             if default_tax_rates is not None:
@@ -1513,7 +1573,10 @@ class Invoice(StripeObject):
                         type(txr) is str and txr.startswith('txr_')
                         for txr in subscription_default_tax_rates
                     )
-                    assert all(type(tr) is str for tr in subscription_default_tax_rates)
+                    assert all(
+                        type(tr) is str
+                        for tr in subscription_default_tax_rates
+                    )
             if subscription_proration_date is not None:
                 assert type(subscription_proration_date) is int
                 assert subscription_proration_date > 1500000000
@@ -1530,11 +1593,16 @@ class Invoice(StripeObject):
                     [TaxRate._api_retrieve(tr) for tr in si['tax_rates']]
             # To return 404 if not existant:
             if subscription_default_tax_rates is not None:
-                [TaxRate._api_retrieve(tr) for tr in subscription_default_tax_rates]
+                [
+                    TaxRate._api_retrieve(tr)
+                    for tr in subscription_default_tax_rates
+                ]
 
         pending_items = [
             ii
-            for ii in InvoiceItem._api_list_all(None, customer=customer, limit=99)._list
+            for ii in InvoiceItem._api_list_all(
+                None, customer=customer, limit=99
+            )._list
             if ii.invoice is None
         ]
         if (
@@ -1630,12 +1698,16 @@ class Invoice(StripeObject):
                 # deduce what is already paid:
                 # TODO: Better not to use limit, but take date into account
                 previous = cls._api_list_all(
-                    None, customer=customer, subscription=subscription, limit=99
+                    None,
+                    customer=customer,
+                    subscription=subscription,
+                    limit=99,
                 )
                 for previous_invoice in previous._list:
                     old_plan = previous_invoice.lines._list[0].plan
                     old_tax_rates = [
-                        tr.id for tr in previous_invoice.lines._list[0].tax_rates
+                        tr.id
+                        for tr in previous_invoice.lines._list[0].tax_rates
                     ]
                     invoice_items.append(
                         InvoiceItem(
@@ -1700,7 +1772,12 @@ class Invoice(StripeObject):
 
     @classmethod
     def _api_list_all(
-        cls, url, customer=None, subscription=None, limit=None, starting_after=None
+        cls,
+        url,
+        customer=None,
+        subscription=None,
+        limit=None,
+        starting_after=None,
     ):
         try:
             if customer is not None:
@@ -1908,7 +1985,9 @@ class InvoiceItem(StripeObject):
         self.metadata = metadata or {}
 
     @classmethod
-    def _api_list_all(cls, url, customer=None, limit=None, starting_after=None):
+    def _api_list_all(
+        cls, url, customer=None, limit=None, starting_after=None
+    ):
         try:
             if customer is not None:
                 assert type(customer) is str and customer.startswith('cus_')
@@ -1939,7 +2018,9 @@ class InvoiceLineItem(StripeObject):
         # All exceptions must be raised before this point.
         super().__init__()
 
-        self.type = 'invoiceitem' if isinstance(item, InvoiceItem) else 'subscription'
+        self.type = (
+            'invoiceitem' if isinstance(item, InvoiceItem) else 'subscription'
+        )
 
         if self.type == 'subscription':
             self.subscription_item = item.id
@@ -2075,7 +2156,11 @@ class PaymentIntent(StripeObject):
                     or payment_method.startswith('card_')
                 )
             if capture_method is not None:
-                assert capture_method in ('automatic', 'automatic_async', 'manual')
+                assert capture_method in (
+                    'automatic',
+                    'automatic_async',
+                    'manual',
+                )
             if setup_future_usage is not None:
                 assert setup_future_usage in ('on_session', 'off_session')
         except AssertionError:
@@ -2153,7 +2238,10 @@ class PaymentIntent(StripeObject):
             return 'requires_action'
         if self.latest_charge is None:
             return 'requires_confirmation'
-        if self.latest_charge.status == 'succeeded' and not self.latest_charge.captured:
+        if (
+            self.latest_charge.status == 'succeeded'
+            and not self.latest_charge.captured
+        ):
             return 'requires_capture'
         if self.latest_charge.status == 'succeeded':
             return 'succeeded'
@@ -2174,7 +2262,9 @@ class PaymentIntent(StripeObject):
         if self._authentication_failed:
             return {
                 'code': 'payment_intent_authentication_failure',
-                'message': ('The provided PaymentMethod has failed authentication.'),
+                'message': (
+                    'The provided PaymentMethod has failed authentication.'
+                ),
             }
         if self.latest_charge:
             if self.latest_charge.status == 'failed':
@@ -2232,7 +2322,10 @@ class PaymentIntent(StripeObject):
         if payment_method._requires_authentication():
             self.next_action = {
                 'type': 'use_stripe_sdk',
-                'use_stripe_sdk': {'type': 'three_d_secure_redirect', 'stripe_js': ''},
+                'use_stripe_sdk': {
+                    'type': 'three_d_secure_redirect',
+                    'stripe_js': '',
+                },
             }
         else:
             self._create_charge(on_failure_now=on_failure_now)
@@ -2261,7 +2354,9 @@ class PaymentIntent(StripeObject):
         return obj
 
     @classmethod
-    def _api_authenticate(cls, id, client_secret=None, success=False, **kwargs):
+    def _api_authenticate(
+        cls, id, client_secret=None, success=False, **kwargs
+    ):
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
@@ -2303,15 +2398,25 @@ class PaymentIntent(StripeObject):
             raise UserError(400, 'Bad request')
 
         obj = cls._api_retrieve(id)
-        obj.latest_charge._capture(amount=amount_to_capture, on_success=obj._on_success)
+        obj.latest_charge._capture(
+            amount=amount_to_capture, on_success=obj._on_success
+        )
         return obj
 
 
 extra_apis.extend(
     (
-        ('POST', '/v1/payment_intents/{id}/confirm', PaymentIntent._api_confirm),
+        (
+            'POST',
+            '/v1/payment_intents/{id}/confirm',
+            PaymentIntent._api_confirm,
+        ),
         ('POST', '/v1/payment_intents/{id}/cancel', PaymentIntent._api_cancel),
-        ('POST', '/v1/payment_intents/{id}/capture', PaymentIntent._api_capture),
+        (
+            'POST',
+            '/v1/payment_intents/{id}/capture',
+            PaymentIntent._api_capture,
+        ),
         (
             'POST',
             '/v1/payment_intents/{id}/_authenticate',
@@ -2368,7 +2473,9 @@ class PaymentMethod(StripeObject):
 
         if type == 'card':
             if not (2019 <= card['exp_year'] < 2100):
-                raise UserError(400, 'Bad request', {'code': 'invalid_expiry_year'})
+                raise UserError(
+                    400, 'Bad request', {'code': 'invalid_expiry_year'}
+                )
 
         # All exceptions must be raised before this point.
         super().__init__()
@@ -2389,7 +2496,9 @@ class PaymentMethod(StripeObject):
                 'three_d_secure_usage': {'supported': True},
             }
         elif self.type == 'sepa_debit':
-            self._sepa_debit_iban = re.sub(r'\s', '', sepa_debit['iban']).upper()
+            self._sepa_debit_iban = re.sub(
+                r'\s', '', sepa_debit['iban']
+            ).upper()
             self.sepa_debit = {
                 'country': self._sepa_debit_iban[:2],
                 'bank_code': self._sepa_debit_iban[4:12],
@@ -2454,7 +2563,9 @@ class PaymentMethod(StripeObject):
         Customer._api_retrieve(customer)  # to return 404 if not existant
 
         if obj._attaching_is_declined():
-            raise UserError(402, 'Your card was declined.', {'code': 'card_declined'})
+            raise UserError(
+                402, 'Your card was declined.', {'code': 'card_declined'}
+            )
 
         obj.customer = customer
         return obj
@@ -2546,7 +2657,9 @@ class PaymentMethod(StripeObject):
             url, limit=limit, starting_after=starting_after
         )
         li._list = [
-            pm for pm in li._list if pm.customer == customer and pm.type == type
+            pm
+            for pm in li._list
+            if pm.customer == customer and pm.type == type
         ]
         return li
 
@@ -2592,7 +2705,9 @@ class Plan(StripeObject):
         # Support Stripe API <= 2018-02-05:
         if product is None and name is not None:
             product = dict(
-                name=name, metadata=metadata, statement_descriptor=statement_descriptor
+                name=name,
+                metadata=metadata,
+                statement_descriptor=statement_descriptor,
             )
 
         amount = try_convert_to_int(amount)
@@ -2667,7 +2782,13 @@ class Plan(StripeObject):
 
     @classmethod
     def _api_list_all(
-        cls, url, active=None, product=None, limit=None, starting_after=None, **kwargs
+        cls,
+        url,
+        active=None,
+        product=None,
+        limit=None,
+        starting_after=None,
+        **kwargs,
     ):
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
@@ -2862,7 +2983,9 @@ class Product(StripeObject):
         schedule_webhook(Event('product.created', self))
 
     @classmethod
-    def _api_list_all(cls, url, active=None, limit=None, starting_after=None, **kwargs):
+    def _api_list_all(
+        cls, url, active=None, limit=None, starting_after=None, **kwargs
+    ):
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
@@ -2949,7 +3072,11 @@ class Price(StripeObject):
             if nickname is not None:
                 assert _type(nickname) is str
             if tax_behavior is not None:
-                assert tax_behavior in ('inclusive', 'exclusive', 'unspecified')
+                assert tax_behavior in (
+                    'inclusive',
+                    'exclusive',
+                    'unspecified',
+                )
             if unit_amount is not None:
                 assert _type(unit_amount) is int and unit_amount >= 0
             if unit_amount_decimal is not None:
@@ -2971,7 +3098,12 @@ class Price(StripeObject):
             if recurring is not None:
                 assert _type(recurring) is dict
                 assert 'interval' in recurring
-                assert recurring['interval'] in ('day', 'week', 'month', 'year')
+                assert recurring['interval'] in (
+                    'day',
+                    'week',
+                    'month',
+                    'year',
+                )
                 if 'interval_count' in recurring:
                     recurring['interval_count'] = try_convert_to_int(
                         recurring['interval_count']
@@ -3100,10 +3232,17 @@ class Price(StripeObject):
             filtered_prices = []
             for price in all_prices:
                 if (
-                    (price.nickname and query.lower() in price.nickname.lower())
-                    or (price.product and query.lower() in price.product.lower())
+                    (
+                        price.nickname
+                        and query.lower() in price.nickname.lower()
+                    )
+                    or (
+                        price.product
+                        and query.lower() in price.product.lower()
+                    )
                     or any(
-                        query.lower() in str(v).lower() for v in price.metadata.values()
+                        query.lower() in str(v).lower()
+                        for v in price.metadata.values()
                     )
                 ):
                     filtered_prices.append(price)
@@ -3140,7 +3279,12 @@ class Refund(StripeObject):
     _id_prefix = 're_'
 
     def __init__(
-        self, charge=None, payment_intent=None, amount=None, metadata=None, **kwargs
+        self,
+        charge=None,
+        payment_intent=None,
+        amount=None,
+        metadata=None,
+        **kwargs,
     ):
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
@@ -3151,7 +3295,9 @@ class Refund(StripeObject):
                 assert type(charge) is str and charge.startswith('ch_')
                 assert payment_intent is None
             elif payment_intent is not None:
-                assert type(payment_intent) is str and payment_intent.startswith('pi_')
+                assert type(
+                    payment_intent
+                ) is str and payment_intent.startswith('pi_')
             else:
                 raise UserError(400, 'Expected charge or payment_intent')
             if amount is not None:
@@ -3198,15 +3344,24 @@ class Refund(StripeObject):
 
     @classmethod
     def _api_list_all(
-        cls, url, charge=None, payment_intent=None, limit=None, starting_after=None
+        cls,
+        url,
+        charge=None,
+        payment_intent=None,
+        limit=None,
+        starting_after=None,
     ):
         try:
             if charge is not None:
                 assert type(charge) is str and charge.startswith('ch_')
                 assert payment_intent is None
             elif payment_intent is not None:
-                assert type(payment_intent) is str and payment_intent.startswith('pi_')
-                payment_intent_obj = PaymentIntent._api_retrieve(payment_intent)
+                assert type(
+                    payment_intent
+                ) is str and payment_intent.startswith('pi_')
+                payment_intent_obj = PaymentIntent._api_retrieve(
+                    payment_intent
+                )
                 charge = payment_intent_obj.latest_charge.id
         except AssertionError:
             raise UserError(400, 'Bad request')
@@ -3279,7 +3434,9 @@ class Source(StripeObject):
         self.usage = 'reusable'
 
         if self.type == 'sepa_debit':
-            self._sepa_debit_iban = re.sub(r'\s', '', sepa_debit['iban']).upper()
+            self._sepa_debit_iban = re.sub(
+                r'\s', '', sepa_debit['iban']
+            ).upper()
             self.sepa_debit = {
                 'country': self._sepa_debit_iban[:2],
                 'bank_code': self._sepa_debit_iban[4:12],
@@ -3330,7 +3487,8 @@ class SetupIntent(StripeObject):
                 payment_method_types = ['card']
             assert type(payment_method_types) is list
             assert all(
-                t in ('card', 'sepa_debit', 'ideal') for t in payment_method_types
+                t in ('card', 'sepa_debit', 'ideal')
+                for t in payment_method_types
             )
         except AssertionError:
             raise UserError(400, 'Bad request')
@@ -3398,19 +3556,26 @@ class SetupIntent(StripeObject):
         if pm._attaching_is_declined():
             self.status = 'canceled'
             self.next_action = None
-            raise UserError(402, 'Your card was declined.', {'code': 'card_declined'})
+            raise UserError(
+                402, 'Your card was declined.', {'code': 'card_declined'}
+            )
         elif pm._requires_authentication():
             self.status = 'requires_action'
             self.next_action = {
                 'type': 'use_stripe_sdk',
-                'use_stripe_sdk': {'type': 'three_d_secure_redirect', 'stripe_js': ''},
+                'use_stripe_sdk': {
+                    'type': 'three_d_secure_redirect',
+                    'stripe_js': '',
+                },
             }
         else:
             self.status = 'succeeded'
             self.next_action = None
 
     @classmethod
-    def _api_cancel(cls, id, use_stripe_sdk=None, client_secret=None, **kwargs):
+    def _api_cancel(
+        cls, id, use_stripe_sdk=None, client_secret=None, **kwargs
+    ):
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
@@ -3474,7 +3639,9 @@ class Subscription(StripeObject):
         trial_end = try_convert_to_int(trial_end)
         trial_from_plan = try_convert_to_bool(trial_from_plan)
         tax_percent = try_convert_to_float(tax_percent)
-        enable_incomplete_payments = try_convert_to_bool(enable_incomplete_payments)
+        enable_incomplete_payments = try_convert_to_bool(
+            enable_incomplete_payments
+        )
         trial_period_days = try_convert_to_int(trial_period_days)
         backdate_start_date = try_convert_to_int(backdate_start_date)
         billing_cycle_anchor = try_convert_to_int(billing_cycle_anchor)
@@ -3526,7 +3693,10 @@ class Subscription(StripeObject):
                 if item['metadata'] is not None:
                     assert type(item['metadata']) is dict
             assert type(enable_incomplete_payments) is bool
-            assert payment_behavior in ('allow_incomplete', 'error_if_incomplete')
+            assert payment_behavior in (
+                'allow_incomplete',
+                'error_if_incomplete',
+            )
             if off_session is not None:
                 off_session = try_convert_to_bool(off_session)
                 assert type(off_session) is bool
@@ -3544,7 +3714,9 @@ class Subscription(StripeObject):
                 [TaxRate._api_retrieve(tr) for tr in item['tax_rates']]
         # To return 404 if not existant:
         if default_tax_rates is not None:
-            default_tax_rates = [TaxRate._api_retrieve(tr) for tr in default_tax_rates]
+            default_tax_rates = [
+                TaxRate._api_retrieve(tr) for tr in default_tax_rates
+            ]
 
         # All exceptions must be raised before this point.
         super().__init__()
@@ -3570,7 +3742,8 @@ class Subscription(StripeObject):
         self.billing_cycle_anchor = billing_cycle_anchor
         self.off_session = off_session
         self._enable_incomplete_payments = (
-            enable_incomplete_payments and payment_behavior != 'error_if_incomplete'
+            enable_incomplete_payments
+            and payment_behavior != 'error_if_incomplete'
         )
 
         self.items = List('/v1/subscription_items?subscription=' + self.id)
@@ -3584,7 +3757,9 @@ class Subscription(StripeObject):
             )
         )
 
-        create_an_invoice = self.trial_end is None and self.trial_period_days is None
+        create_an_invoice = (
+            self.trial_end is None and self.trial_period_days is None
+        )
         if create_an_invoice:
             self._create_invoice()
 
@@ -3638,7 +3813,9 @@ class Subscription(StripeObject):
             # payment fails:
             if (
                 invoice.charge.status == 'pending'
-                and PaymentMethod._api_retrieve(invoice.charge.payment_method).type
+                and PaymentMethod._api_retrieve(
+                    invoice.charge.payment_method
+                ).type
                 == 'sepa_debit'
             ):
                 self.status = 'active'
@@ -3775,7 +3952,9 @@ class Subscription(StripeObject):
                 self.items._list[0].plan.id != items[0]['plan']
                 or self.items._list[0].quantity != items[0]['quantity']
             ):
-                self.items = List('/v1/subscription_items?subscription=' + self.id)
+                self.items = List(
+                    '/v1/subscription_items?subscription=' + self.id
+                )
                 item = SubscriptionItem(
                     subscription=self.id,
                     plan=items[0]['plan'],
@@ -3790,11 +3969,15 @@ class Subscription(StripeObject):
                 # deduce what is already paid:
                 # TODO: Better not to use limit, but take date into account
                 previous = Invoice._api_list_all(
-                    None, customer=self.customer, subscription=self.id, limit=99
+                    None,
+                    customer=self.customer,
+                    subscription=self.id,
+                    limit=99,
                 )
                 for previous_invoice in previous._list:
                     previous_tax_rates = [
-                        tr.id for tr in (previous_invoice.lines._list[0].tax_rates)
+                        tr.id
+                        for tr in (previous_invoice.lines._list[0].tax_rates)
                     ]
                     InvoiceItem(
                         amount=-previous_invoice.subtotal,
@@ -3808,7 +3991,9 @@ class Subscription(StripeObject):
                     )
 
             elif self.items._list[0].tax_rates != items[0]['tax_rates']:
-                self.items = List('/v1/subscription_items?subscription=' + self.id)
+                self.items = List(
+                    '/v1/subscription_items?subscription=' + self.id
+                )
                 item = SubscriptionItem(
                     subscription=self.id,
                     plan=items[0]['plan'],
@@ -3975,7 +4160,9 @@ class SubscriptionItem(StripeObject):
                 if quantity <= 0 or tier_from > quantity:
                     break
 
-                amount += self._calculate_amount_in_tier(quantity - tier_from, i)
+                amount += self._calculate_amount_in_tier(
+                    quantity - tier_from, i
+                )
 
                 if t['up_to'] == 'inf':
                     quantity = 0
@@ -3997,7 +4184,9 @@ class TaxId(StripeObject):
     object = 'tax_id'
     _id_prefix = 'txi_'
 
-    def __init__(self, country=None, customer=None, type=None, value=None, **kwargs):
+    def __init__(
+        self, country=None, customer=None, type=None, value=None, **kwargs
+    ):
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 

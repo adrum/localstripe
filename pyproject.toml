@@ -48,6 +48,13 @@ localstripe = ["localstripe-v3.js"]
 [tool.setuptools.dynamic]
 version = {attr = "localstripe.__version__"}
 
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.lint]
+fixable = ["ALL"]
+unfixable = []
+
 [tool.ruff.format]
 quote-style = "single"
 indent-style = "space"
