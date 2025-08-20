@@ -71,7 +71,7 @@ class APILog:
                     'tax_rates': 'tax_rate',
                     'payment_methods': 'payment_method',
                     'invoice_items': 'invoice_item',
-                    'subscription_items': 'subscription_item'
+                    'subscription_items': 'subscription_item',
                 }
 
                 self.object_type = type_map.get(object_type, object_type.rstrip('s'))
@@ -96,7 +96,7 @@ class APILog:
                     'tax_rates': 'tax_rate',
                     'payment_methods': 'payment_method',
                     'invoice_items': 'invoice_item',
-                    'subscription_items': 'subscription_item'
+                    'subscription_items': 'subscription_item',
                 }
                 self.object_type = type_map.get(object_type, object_type.rstrip('s'))
 
@@ -108,10 +108,12 @@ class APILog:
         self.duration_ms = int((time.time() - self.request_time) * 1000)
 
         # If we created an object, extract its ID from the response
-        if (self.method == 'POST' and
-                self.status_code in (200, 201) and
-                response_body and
-                isinstance(response_body, dict)):
+        if (
+            self.method == 'POST'
+            and self.status_code in (200, 201)
+            and response_body
+            and isinstance(response_body, dict)
+        ):
             if 'id' in response_body:
                 self.object_id = response_body['id']
             if 'object' in response_body:
@@ -131,7 +133,7 @@ class APILog:
             'created': self.created,
             'error': self.error,
             'object_id': self.object_id,
-            'object_type': self.object_type
+            'object_type': self.object_type,
         }
 
 
@@ -142,7 +144,9 @@ def create_api_log(method, path, query_params=None, request_body=None):
     return log
 
 
-def get_api_logs(limit=100, offset=0, method=None, status_code=None, object_type=None, object_id=None):
+def get_api_logs(
+    limit=100, offset=0, method=None, status_code=None, object_type=None, object_id=None
+):
     """Retrieve API logs with optional filtering"""
     # Convert deque to list for filtering
     logs = list(_api_logs)
@@ -162,13 +166,13 @@ def get_api_logs(limit=100, offset=0, method=None, status_code=None, object_type
 
     # Apply pagination
     total_count = len(logs)
-    logs = logs[offset:offset + limit]
+    logs = logs[offset : offset + limit]
 
     return {
         'object': 'list',
         'data': [log.to_dict() for log in logs],
         'has_more': total_count > offset + limit,
-        'total_count': total_count
+        'total_count': total_count,
     }
 
 

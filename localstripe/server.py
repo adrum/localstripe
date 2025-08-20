@@ -24,10 +24,30 @@ import socket
 
 from aiohttp import web
 
-from .resources import BalanceTransaction, Charge, Coupon, Customer, Event, \
-    Invoice, InvoiceItem, PaymentIntent, PaymentMethod, Payout, Plan, \
-    Price, Product, Refund, SetupIntent, Source, Subscription, SubscriptionItem, \
-    TaxRate, Token, extra_apis, store
+from .resources import (
+    BalanceTransaction,
+    Charge,
+    Coupon,
+    Customer,
+    Event,
+    Invoice,
+    InvoiceItem,
+    PaymentIntent,
+    PaymentMethod,
+    Payout,
+    Plan,
+    Price,
+    Product,
+    Refund,
+    SetupIntent,
+    Source,
+    Subscription,
+    SubscriptionItem,
+    TaxRate,
+    Token,
+    extra_apis,
+    store,
+)
 from .errors import UserError
 from .webhooks import register_webhook, _webhook_logs
 from .api_logs import create_api_log, get_api_logs, clear_api_logs
@@ -35,9 +55,8 @@ from .api_logs import create_api_log, get_api_logs, clear_api_logs
 
 def json_response(*args, **kwargs):
     response = web.json_response(
-        *args,
-        dumps=lambda x: json.dumps(x, indent=2, sort_keys=True) + '\n',
-        **kwargs)
+        *args, dumps=lambda x: json.dumps(x, indent=2, sort_keys=True) + '\n', **kwargs
+    )
 
     # Store response data for logging if available
     if args and hasattr(response, '_logged_data'):
@@ -52,10 +71,12 @@ async def add_cors_headers(request, response):
     origin = request.headers.get('Origin')
     if origin:
         response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Headers'] = \
+        response.headers['Access-Control-Allow-Headers'] = (
             'Content-Type, Accept, Authorization, X-LocalStripe-UI, X-Requested-With'
-        response.headers['Access-Control-Allow-Methods'] = \
+        )
+        response.headers['Access-Control-Allow-Methods'] = (
             'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+        )
 
 
 @web.middleware
@@ -95,8 +116,9 @@ def unflatten_data(multidict):
         data = dict()
         for k in multidict.keys():
             values = multidict.getall(k)
-            values = [handle_multiple_keys(v) if hasattr(v, 'keys') else v
-                      for v in values]
+            values = [
+                handle_multiple_keys(v) if hasattr(v, 'keys') else v for v in values
+            ]
             if len(k) > 2 and k.endswith('[]'):
                 k = k[:-2]
             else:
@@ -123,8 +145,7 @@ def unflatten_data(multidict):
     # Transform `{'items': {'0': {'plan': 'pro-yearly'}}}` into
     # `{'items': [{'plan': 'pro-yearly'}]}`
     def transform_lists(data):
-        if (len(data) > 0 and
-                all([re.match(r'^[0-9]+$', k) for k in data.keys()])):
+        if len(data) > 0 and all([re.match(r'^[0-9]+$', k) for k in data.keys()]):
             new_data = [(int(k), v) for k, v in data.items()]
             new_data.sort(key=lambda k: int(k[0]))
             data = []
@@ -174,7 +195,18 @@ async def auth_middleware(request, handler):
         or request.path == '/'
         or request.path.startswith('/assets/')
         or request.path.endswith(
-            ('.js', '.css', '.html', '.svg', '.png', '.jpg', '.ico', '.woff', '.woff2', '.ttf')
+            (
+                '.js',
+                '.css',
+                '.html',
+                '.svg',
+                '.png',
+                '.jpg',
+                '.ico',
+                '.woff',
+                '.woff2',
+                '.ttf',
+            )
         )
     ):
         is_auth = True
@@ -183,15 +215,16 @@ async def auth_middleware(request, handler):
         # There are exceptions (for example POST /v1/tokens, POST /v1/sources)
         # where authentication can be done using the public key (passed as
         # `key` in POST data) instead of the private key.
-        accept_key_in_post_data = (
-            request.method == 'POST' and
-            any(re.match(pattern, request.path) for pattern in (
+        accept_key_in_post_data = request.method == 'POST' and any(
+            re.match(pattern, request.path)
+            for pattern in (
                 r'^/v1/tokens$',
                 r'^/v1/sources$',
                 r'^/v1/payment_intents/\w+/_authenticate\b',
                 r'^/v1/setup_intents/\w+/confirm$',
                 r'^/v1/setup_intents/\w+/cancel$',
-            )))
+            )
+        )
 
         is_auth = get_api_key(request) is not None
 
@@ -201,8 +234,11 @@ async def auth_middleware(request, handler):
             data = unflatten_data(request.query)
 
         if not is_auth and accept_key_in_post_data:
-            if ('key' in data and type(data['key']) is str and
-                    data['key'].startswith('pk_')):
+            if (
+                'key' in data
+                and type(data['key']) is str
+                and data['key'].startswith('pk_')
+            ):
                 is_auth = True
 
     if not is_auth:
@@ -228,13 +264,28 @@ async def api_logging_middleware(request, handler):
         return await handler(request)
 
     # Skip logging for internal config endpoints (except api_logs fetching), static files, and UI routes
-    if (request.path.startswith('/_config/api_logs') or
-            request.path.startswith('/_config/webhooks') or
-            request.path.startswith('/_config/data') or
-            request.path.startswith('/js.stripe.com/') or
-            request.path == '/' or
-            request.path.startswith('/assets/') or
-            request.path.endswith(('.js', '.css', '.html', '.svg', '.png', '.jpg', '.ico', '.woff', '.woff2', '.ttf'))):
+    if (
+        request.path.startswith('/_config/api_logs')
+        or request.path.startswith('/_config/webhooks')
+        or request.path.startswith('/_config/data')
+        or request.path.startswith('/js.stripe.com/')
+        or request.path == '/'
+        or request.path.startswith('/assets/')
+        or request.path.endswith(
+            (
+                '.js',
+                '.css',
+                '.html',
+                '.svg',
+                '.png',
+                '.jpg',
+                '.ico',
+                '.woff',
+                '.woff2',
+                '.ttf',
+            )
+        )
+    ):
         return await handler(request)
 
     # Get request data
@@ -252,7 +303,7 @@ async def api_logging_middleware(request, handler):
         method=request.method,
         path=request.path,
         query_params=query_params,
-        request_body=request_body
+        request_body=request_body,
     )
 
     try:
@@ -270,17 +321,24 @@ async def api_logging_middleware(request, handler):
     except Exception as e:
         # Log exception with detailed information
         import traceback
+
         error_details = {
             'message': str(e),
             'type': type(e).__name__,
-            'traceback': traceback.format_exc()
+            'traceback': traceback.format_exc(),
         }
         api_log.complete_request(500, error=error_details)
         raise
 
 
-app = web.Application(middlewares=[error_middleware, auth_middleware,
-                                   api_logging_middleware, save_store_middleware])
+app = web.Application(
+    middlewares=[
+        error_middleware,
+        auth_middleware,
+        api_logging_middleware,
+        save_store_middleware,
+    ]
+)
 app.on_response_prepare.append(add_cors_headers)
 
 
@@ -290,6 +348,7 @@ def api_create(cls, url):
         data = data or {}
         expand = data.pop('expand', None)
         return json_response(cls._api_create(**data)._export(expand=expand))
+
     return f
 
 
@@ -299,6 +358,7 @@ def api_retrieve(cls, url):
         data = unflatten_data(request.query)
         expand = data.pop('expand', None)
         return json_response(cls._api_retrieve(id)._export(expand=expand))
+
     return f
 
 
@@ -309,8 +369,8 @@ def api_update(cls, url):
         if not data:
             raise UserError(400, 'Bad request')
         expand = data.pop('expand', None)
-        return json_response(cls._api_update(id, **data)._export(
-            expand=expand))
+        return json_response(cls._api_update(id, **data)._export(expand=expand))
+
     return f
 
 
@@ -318,6 +378,7 @@ def api_delete(cls, url):
     def f(request):
         id = request.match_info['id']
         return json_response(cls._api_delete(id)._export())
+
     return f
 
 
@@ -325,8 +386,8 @@ def api_list_all(cls, url):
     def f(request):
         data = unflatten_data(request.query)
         expand = data.pop('expand', None)
-        return json_response(cls._api_list_all(url, **data)
-                             ._export(expand=expand))
+        return json_response(cls._api_list_all(url, **data)._export(expand=expand))
+
     return f
 
 
@@ -344,6 +405,7 @@ def api_extra(func, url):
             data['tax_id'] = request.match_info['tax_id']
         expand = data.pop('expand', None)
         return json_response(func(**data)._export(expand=expand))
+
     return f
 
 
@@ -353,24 +415,42 @@ for method, url, func in extra_apis:
     app.router.add_route(method, url, api_extra(func, url))
 
 
-for cls in (BalanceTransaction, Charge, Coupon, Customer, Event, Invoice,
-            InvoiceItem, PaymentIntent, PaymentMethod, Payout, Plan, Price, Product,
-            Refund, SetupIntent, Source, Subscription, SubscriptionItem,
-            TaxRate, Token):
+for cls in (
+    BalanceTransaction,
+    Charge,
+    Coupon,
+    Customer,
+    Event,
+    Invoice,
+    InvoiceItem,
+    PaymentIntent,
+    PaymentMethod,
+    Payout,
+    Plan,
+    Price,
+    Product,
+    Refund,
+    SetupIntent,
+    Source,
+    Subscription,
+    SubscriptionItem,
+    TaxRate,
+    Token,
+):
     for method, url, func in (
-            ('POST', '/v1/' + cls.object + 's', api_create),
-            ('GET', '/v1/' + cls.object + 's/{id}', api_retrieve),
-            ('POST', '/v1/' + cls.object + 's/{id}', api_update),
-            ('DELETE', '/v1/' + cls.object + 's/{id}', api_delete),
-            ('GET', '/v1/' + cls.object + 's', api_list_all)):
+        ('POST', '/v1/' + cls.object + 's', api_create),
+        ('GET', '/v1/' + cls.object + 's/{id}', api_retrieve),
+        ('POST', '/v1/' + cls.object + 's/{id}', api_update),
+        ('DELETE', '/v1/' + cls.object + 's/{id}', api_delete),
+        ('GET', '/v1/' + cls.object + 's', api_list_all),
+    ):
         app.router.add_route(method, url, func(cls, url))
 
 
 def localstripe_js(request):
     path = os.path.dirname(os.path.realpath(__file__)) + '/localstripe-v3.js'
     with open(path) as f:
-        return web.Response(text=f.read(),
-                            content_type='application/javascript')
+        return web.Response(text=f.read(), content_type='application/javascript')
 
 
 app.router.add_get('/js.stripe.com/v3/', localstripe_js)
@@ -405,22 +485,25 @@ async def get_webhook_logs(request):
     sorted_logs = sorted(_webhook_logs, key=lambda x: x.created, reverse=True)
 
     # Apply pagination
-    paginated_logs = sorted_logs[offset:offset + limit]
+    paginated_logs = sorted_logs[offset : offset + limit]
 
     # Convert to dict format
     logs_data = [log.to_dict() for log in paginated_logs]
 
-    return json_response({
-        'object': 'list',
-        'data': logs_data,
-        'has_more': len(sorted_logs) > offset + limit,
-        'total_count': len(sorted_logs)
-    })
+    return json_response(
+        {
+            'object': 'list',
+            'data': logs_data,
+            'has_more': len(sorted_logs) > offset + limit,
+            'total_count': len(sorted_logs),
+        }
+    )
 
 
 async def get_webhooks_config(request):
     """Retrieve webhook configurations"""
     from .webhooks import _webhooks
+
     return json_response(_webhooks)
 
 
@@ -455,6 +538,7 @@ async def retry_webhook(request):
         event = Event._api_retrieve(webhook_log.event_id)
         # Schedule a new webhook delivery
         from .webhooks import schedule_webhook
+
         schedule_webhook(event)
         return web.Response()
     except Exception as e:
@@ -480,7 +564,7 @@ async def get_api_logs_endpoint(request):
         method=method,
         status_code=status_code,
         object_type=object_type,
-        object_id=object_id
+        object_id=object_id,
     )
 
     return json_response(logs)
