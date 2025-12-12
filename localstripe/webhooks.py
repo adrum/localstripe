@@ -216,3 +216,26 @@ async def _send_webhook(event, max_retries=3):
 
 def schedule_webhook(event):
     asyncio.ensure_future(_send_webhook(event))
+
+
+def delete_webhooks_for_account(account_id):
+    """Delete all webhooks belonging to a specific account"""
+    global _webhooks
+    keys_to_delete = [
+        webhook_id for webhook_id, webhook in _webhooks.items()
+        if webhook.account_id == account_id
+    ]
+    for key in keys_to_delete:
+        del _webhooks[key]
+    return len(keys_to_delete)
+
+
+def delete_webhook_logs_for_account(account_id):
+    """Delete all webhook logs belonging to a specific account"""
+    global _webhook_logs
+    original_count = len(_webhook_logs)
+    _webhook_logs = [
+        log for log in _webhook_logs
+        if log.account_id != account_id
+    ]
+    return original_count - len(_webhook_logs)

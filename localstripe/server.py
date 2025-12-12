@@ -52,7 +52,12 @@ from .resources import (
     get_current_account_id,
 )
 from .errors import UserError
-from .webhooks import register_webhook, _webhook_logs
+from .webhooks import (
+    register_webhook,
+    _webhook_logs,
+    delete_webhooks_for_account,
+    delete_webhook_logs_for_account,
+)
 from .api_logs import create_api_log, get_api_logs, clear_api_logs
 
 
@@ -783,13 +788,50 @@ async def update_account(request):
 
 
 async def delete_account(request):
-    """Delete an account"""
+    """Delete an account and all its associated data (cascade delete)"""
     account_id = request.match_info['id']
+
     # Ensure we don't delete the last account
     accounts = Account._api_list_all()
     if len(accounts) <= 1:
         raise UserError(400, 'Cannot delete the last account')
+
+    # Cascade delete all account data
+    deleted_counts = {
+        'objects': 0,
+        'webhooks': 0,
+        'webhook_logs': 0,
+        'api_logs': 0,
+    }
+
+    # Delete all objects in store belonging to this account
+    keys_to_delete = []
+    for key, value in store.items():
+        # Skip account objects themselves (handled separately)
+        if key.startswith('_account:'):
+            continue
+        # Check if object belongs to this account
+        obj_account = getattr(value, '_account_id', None)
+        if obj_account == account_id:
+            keys_to_delete.append(key)
+
+    for key in keys_to_delete:
+        del store[key]
+    deleted_counts['objects'] = len(keys_to_delete)
+
+    # Delete webhooks for this account
+    deleted_counts['webhooks'] = delete_webhooks_for_account(account_id)
+
+    # Delete webhook logs for this account
+    deleted_counts['webhook_logs'] = delete_webhook_logs_for_account(account_id)
+
+    # Delete API logs for this account
+    clear_api_logs(account_id=account_id)
+
+    # Finally, delete the account itself
     result = Account._api_delete(account_id)
+    result['deleted_data'] = deleted_counts
+
     return json_response(result)
 
 
