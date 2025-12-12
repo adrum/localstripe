@@ -49,6 +49,7 @@ from .resources import (
     extra_apis,
     store,
     set_current_account_id,
+    get_current_account_id,
 )
 from .errors import UserError
 from .webhooks import register_webhook, _webhook_logs
@@ -357,12 +358,13 @@ async def api_logging_middleware(request, handler):
         except Exception:
             request_body = None
 
-    # Create log entry
+    # Create log entry with account context
     api_log = create_api_log(
         method=request.method,
         path=request.path,
         query_params=query_params,
         request_body=request_body,
+        account_id=get_current_account_id(),
     )
 
     try:
@@ -522,6 +524,14 @@ def localstripe_js(request):
 app.router.add_get('/js.stripe.com/v3/', localstripe_js)
 
 
+def get_account_from_request(request):
+    """Extract account from request's API key (for config endpoints)."""
+    api_key = get_api_key(request)
+    if api_key:
+        return Account._api_retrieve_by_key(api_key)
+    return None
+
+
 async def config_webhook(request):
     id = request.match_info['id']
     data = await get_post_data(request) or {}
@@ -532,23 +542,81 @@ async def config_webhook(request):
         raise UserError(400, 'Bad request')
     if events is not None and type(events) is not list:
         raise UserError(400, 'Bad request')
-    register_webhook(id, url, secret, events)
+
+    # Get account from request
+    account = get_account_from_request(request)
+    account_id = account.id if account else None
+
+    register_webhook(id, url, secret, events, account_id)
     return web.Response()
 
 
 async def flush_store(request):
-    store.clear()
-    return web.Response()
+    """Flush data - either all data or just current account's data.
+
+    Query params:
+    - account_only=true: Only flush data for the current account
+    """
+    data = unflatten_data(request.query)
+    account_only = data.get('account_only', 'false').lower() == 'true'
+
+    if account_only:
+        # Get current account
+        account = get_account_from_request(request)
+        if not account:
+            raise UserError(400, 'No account specified')
+
+        account_id = account.id
+
+        # Delete only objects belonging to this account
+        keys_to_delete = []
+        for key, value in store.items():
+            # Skip account objects themselves
+            if key.startswith('_account:'):
+                continue
+            # Check if object belongs to this account
+            obj_account = getattr(value, '_account_id', None)
+            if obj_account == account_id:
+                keys_to_delete.append(key)
+
+        for key in keys_to_delete:
+            del store[key]
+
+        return json_response({
+            'deleted': len(keys_to_delete),
+            'account_id': account_id,
+        })
+    else:
+        # Flush all data (keep accounts)
+        keys_to_delete = [
+            key for key in store.keys()
+            if not key.startswith('_account:')
+        ]
+        for key in keys_to_delete:
+            del store[key]
+
+        return json_response({
+            'deleted': len(keys_to_delete),
+        })
 
 
 async def get_webhook_logs(request):
-    """Retrieve webhook delivery logs"""
+    """Retrieve webhook delivery logs filtered by account"""
     data = unflatten_data(request.query)
     limit = int(data.get('limit', 50))
     offset = int(data.get('offset', 0))
 
+    account = get_account_from_request(request)
+    account_id = account.id if account else None
+
+    # Filter logs by account
+    filtered_logs = [
+        log for log in _webhook_logs
+        if log.account_id is None or log.account_id == account_id
+    ]
+
     # Sort logs by creation time (newest first)
-    sorted_logs = sorted(_webhook_logs, key=lambda x: x.created, reverse=True)
+    sorted_logs = sorted(filtered_logs, key=lambda x: x.created, reverse=True)
 
     # Apply pagination
     paginated_logs = sorted_logs[offset : offset + limit]
@@ -567,22 +635,44 @@ async def get_webhook_logs(request):
 
 
 async def get_webhooks_config(request):
-    """Retrieve webhook configurations"""
+    """Retrieve webhook configurations filtered by account"""
     from .webhooks import _webhooks
 
-    return json_response(_webhooks)
+    account = get_account_from_request(request)
+    account_id = account.id if account else None
+
+    # Filter webhooks by account
+    filtered_webhooks = {}
+    for webhook_id, webhook in _webhooks.items():
+        # Show webhooks that belong to this account or have no account (legacy)
+        if webhook.account_id is None or webhook.account_id == account_id:
+            filtered_webhooks[webhook_id] = {
+                'url': webhook.url,
+                'events': webhook.events,
+                'account_id': webhook.account_id,
+            }
+
+    return json_response(filtered_webhooks)
 
 
 async def delete_webhook_config(request):
-    """Delete a webhook configuration"""
+    """Delete a webhook configuration (must belong to current account)"""
     webhook_id = request.match_info['id']
     from .webhooks import _webhooks
 
-    if webhook_id in _webhooks:
-        del _webhooks[webhook_id]
-        return web.Response()
-    else:
+    if webhook_id not in _webhooks:
         raise UserError(404, 'Webhook not found')
+
+    webhook = _webhooks[webhook_id]
+    account = get_account_from_request(request)
+    account_id = account.id if account else None
+
+    # Only allow deleting webhooks that belong to this account or have no account
+    if webhook.account_id is not None and webhook.account_id != account_id:
+        raise UserError(404, 'Webhook not found')
+
+    del _webhooks[webhook_id]
+    return web.Response()
 
 
 async def retry_webhook(request):
@@ -612,7 +702,7 @@ async def retry_webhook(request):
 
 
 async def get_api_logs_endpoint(request):
-    """Retrieve API logs with optional filtering"""
+    """Retrieve API logs with optional filtering by account"""
     data = unflatten_data(request.query)
 
     # Extract query parameters
@@ -625,6 +715,10 @@ async def get_api_logs_endpoint(request):
     object_type = data.get('object_type', None)
     object_id = data.get('object_id', None)
 
+    # Get account from request for filtering
+    account = get_account_from_request(request)
+    account_id = account.id if account else None
+
     # Get filtered logs
     logs = get_api_logs(
         limit=limit,
@@ -633,6 +727,7 @@ async def get_api_logs_endpoint(request):
         status_code=status_code,
         object_type=object_type,
         object_id=object_id,
+        account_id=account_id,
     )
 
     return json_response(logs)

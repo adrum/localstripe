@@ -23,7 +23,7 @@ _api_logs = deque(maxlen=1000)
 
 
 class APILog:
-    def __init__(self, method, path, query_params=None, request_body=None):
+    def __init__(self, method, path, query_params=None, request_body=None, account_id=None):
         self.id = 'log_' + str(uuid.uuid4()).replace('-', '')[:24]
         self.method = method
         self.path = path
@@ -37,6 +37,7 @@ class APILog:
         self.error = None
         self.object_id = None
         self.object_type = None
+        self.account_id = account_id  # Account that made this request
 
         # Extract object information from path
         self._extract_object_info()
@@ -138,12 +139,13 @@ class APILog:
             'error': self.error,
             'object_id': self.object_id,
             'object_type': self.object_type,
+            'account_id': self.account_id,
         }
 
 
-def create_api_log(method, path, query_params=None, request_body=None):
+def create_api_log(method, path, query_params=None, request_body=None, account_id=None):
     """Create a new API log entry"""
-    log = APILog(method, path, query_params, request_body)
+    log = APILog(method, path, query_params, request_body, account_id)
     _api_logs.append(log)
     return log
 
@@ -155,6 +157,7 @@ def get_api_logs(
     status_code=None,
     object_type=None,
     object_id=None,
+    account_id=None,
 ):
     """Retrieve API logs with optional filtering"""
     # Convert deque to list for filtering
@@ -169,6 +172,12 @@ def get_api_logs(
         logs = [log for log in logs if log.object_type == object_type]
     if object_id:
         logs = [log for log in logs if log.object_id == object_id]
+    if account_id:
+        # Filter by account - show logs for this account or logs without account (legacy)
+        logs = [
+            log for log in logs
+            if log.account_id is None or log.account_id == account_id
+        ]
 
     # Sort by creation time (newest first)
     logs.sort(key=lambda x: x.created, reverse=True)
