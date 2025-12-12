@@ -43,6 +43,7 @@ from .resources import (
     Source,
     Subscription,
     SubscriptionItem,
+    TaxCalculation,
     TaxRate,
     Token,
     extra_apis,
