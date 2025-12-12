@@ -26,6 +26,9 @@ dev = [
     "flake8",
     "flake8-import-order",
 ]
+postgres = [
+    "psycopg2-binary >=2.9.0",
+]
 
 [project.scripts]
 localstripe = "localstripe.server:start"
