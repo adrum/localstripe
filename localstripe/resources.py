@@ -2688,6 +2688,7 @@ class Plan(StripeObject):
         trial_period_days=None,
         nickname=None,
         usage_type='licensed',
+        aggregate_usage=None,
         billing_scheme='per_unit',
         tiers=None,
         tiers_mode=None,
@@ -2745,6 +2746,17 @@ class Plan(StripeObject):
             if nickname is not None:
                 assert type(nickname) is str
             assert usage_type in ['licensed', 'metered']
+            if usage_type == 'metered':
+                if aggregate_usage is None:
+                    aggregate_usage = 'sum'
+                assert aggregate_usage in [
+                    'sum',
+                    'last_during_period',
+                    'last_ever',
+                    'max',
+                ]
+            else:
+                assert aggregate_usage is None
         except AssertionError:
             raise UserError(400, 'Bad request')
 
@@ -2766,6 +2778,7 @@ class Plan(StripeObject):
         self.trial_period_days = trial_period_days
         self.nickname = nickname
         self.usage_type = usage_type
+        self.aggregate_usage = aggregate_usage
         self.billing_scheme = billing_scheme
         self.tiers = tiers
         self.tiers_mode = tiers_mode
@@ -4136,39 +4149,91 @@ class SubscriptionItem(StripeObject):
 
         return dict(start=start_date, end=int(end_date.timestamp()))
 
+    def _get_metered_quantity(self):
+        """Get the quantity for metered billing from usage records."""
+        if self.plan.usage_type != 'metered':
+            return self.quantity
+
+        # Get the subscription period
+        if self._subscription:
+            sub = Subscription._api_retrieve(self._subscription)
+            period_start = sub.current_period_start
+            period_end = sub.current_period_end
+        else:
+            period = self._current_period()
+            period_start = period['start']
+            period_end = period['end']
+
+        # Get usage records for this subscription item
+        usage_records = [
+            value for key, value in store.items()
+            if key.startswith('usage_record:')
+            and value.subscription_item == self.id
+        ]
+
+        # Filter to current period
+        period_usage = [
+            ur for ur in usage_records
+            if period_start <= ur.timestamp <= period_end
+        ]
+
+        if not period_usage:
+            return 0
+
+        # Aggregate based on plan's aggregate_usage setting
+        aggregate_usage = self.plan.aggregate_usage or 'sum'
+        if aggregate_usage == 'sum':
+            return sum(ur.quantity for ur in period_usage)
+        elif aggregate_usage == 'max':
+            return max(ur.quantity for ur in period_usage)
+        elif aggregate_usage == 'last_during_period':
+            sorted_records = sorted(period_usage, key=lambda x: x.timestamp)
+            return sorted_records[-1].quantity if sorted_records else 0
+        elif aggregate_usage == 'last_ever':
+            sorted_records = sorted(usage_records, key=lambda x: x.timestamp)
+            return sorted_records[-1].quantity if sorted_records else 0
+        else:
+            return sum(ur.quantity for ur in period_usage)
+
     def _calculate_amount(self):
+        # For metered plans, use usage records to determine quantity
+        if self.plan.usage_type == 'metered':
+            quantity = self._get_metered_quantity()
+        else:
+            quantity = self.quantity
+
         if self.plan.billing_scheme == 'per_unit':
-            return self.plan.amount * self.quantity
+            return self.plan.amount * quantity
 
         if self.plan.tiers_mode == 'volume':
             index = next(
                 (
                     i
                     for i, t in enumerate(self.plan.tiers)
-                    if t['up_to'] == 'inf' or self.quantity <= int(t['up_to'])
+                    if t['up_to'] == 'inf' or quantity <= int(t['up_to'])
                 )
             )
-            return self._calculate_amount_in_tier(self.quantity, index)
+            return self._calculate_amount_in_tier(quantity, index)
 
         if self.plan.tiers_mode == 'graduated':
-            quantity = self.quantity
+            remaining_quantity = quantity
             amount = 0
 
             tier_from = -1
             for i, t in enumerate(self.plan.tiers):
                 tier_from += 1
-                if quantity <= 0 or tier_from > quantity:
+                if remaining_quantity <= 0 or tier_from > remaining_quantity:
                     break
 
                 amount += self._calculate_amount_in_tier(
-                    quantity - tier_from, i
+                    remaining_quantity - tier_from, i
                 )
 
                 if t['up_to'] == 'inf':
-                    quantity = 0
+                    remaining_quantity = 0
                 else:
                     up_to = int(t['up_to'])
-                    quantity -= up_to
+                    remaining_quantity -= up_to
                     tier_from = up_to
 
             return amount
@@ -4178,6 +4243,199 @@ class SubscriptionItem(StripeObject):
     def _calculate_amount_in_tier(self, quantity, index):
         t = self.plan.tiers[index]
         return int(t['unit_amount']) * quantity + int(t['flat_amount'])
+
+    @classmethod
+    def _api_create_usage_record(cls, id, quantity=None, timestamp=None,
+                                  action='increment', **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        return UsageRecord._api_create(
+            subscription_item=id,
+            quantity=quantity,
+            timestamp=timestamp,
+            action=action,
+        )
+
+    @classmethod
+    def _api_list_usage_record_summaries(cls, id, limit=None,
+                                          starting_after=None, **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        # Verify subscription item exists
+        si = cls._api_retrieve(id)
+
+        # Get the subscription to determine current period
+        if si._subscription:
+            sub = Subscription._api_retrieve(si._subscription)
+            period_start = sub.current_period_start
+            period_end = sub.current_period_end
+        else:
+            period_start = int(time.time())
+            period_end = int(time.time()) + 86400 * 30  # 30 days default
+
+        # Calculate usage summary for the current period
+        usage_records = [
+            value for key, value in store.items()
+            if key.startswith('usage_record:')
+            and value.subscription_item == id
+        ]
+
+        # Aggregate usage for current period
+        period_usage = [
+            ur for ur in usage_records
+            if period_start <= ur.timestamp <= period_end
+        ]
+
+        # Calculate total based on plan's aggregate_usage setting
+        if period_usage:
+            aggregate_usage = si.plan.aggregate_usage or 'sum'
+            if aggregate_usage == 'sum':
+                total_usage = sum(ur.quantity for ur in period_usage)
+            elif aggregate_usage == 'max':
+                total_usage = max(ur.quantity for ur in period_usage)
+            elif aggregate_usage == 'last_during_period':
+                sorted_records = sorted(
+                    period_usage, key=lambda x: x.timestamp
+                )
+                total_usage = sorted_records[-1].quantity if sorted_records else 0
+            elif aggregate_usage == 'last_ever':
+                sorted_records = sorted(
+                    usage_records, key=lambda x: x.timestamp
+                )
+                total_usage = sorted_records[-1].quantity if sorted_records else 0
+            else:
+                total_usage = sum(ur.quantity for ur in period_usage)
+        else:
+            total_usage = 0
+
+        # Create summary object
+        summary = UsageRecordSummary(
+            subscription_item=id,
+            total_usage=total_usage,
+            period_start=period_start,
+            period_end=period_end,
+        )
+
+        li = List('/v1/subscription_items/' + id + '/usage_record_summaries')
+        li._list = [summary]
+        return li
+
+
+extra_apis.extend(
+    (
+        (
+            'POST',
+            '/v1/subscription_items/{id}/usage_records',
+            SubscriptionItem._api_create_usage_record,
+        ),
+        (
+            'GET',
+            '/v1/subscription_items/{id}/usage_record_summaries',
+            SubscriptionItem._api_list_usage_record_summaries,
+        ),
+    )
+)
+
+
+class UsageRecord(StripeObject):
+    object = 'usage_record'
+    _id_prefix = 'mbur_'
+
+    def __init__(
+        self,
+        subscription_item=None,
+        quantity=None,
+        timestamp=None,
+        action='increment',
+        **kwargs,
+    ):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        quantity = try_convert_to_int(quantity)
+        timestamp = try_convert_to_int(timestamp)
+        try:
+            assert type(subscription_item) is str
+            assert subscription_item.startswith('si_')
+            assert type(quantity) is int and quantity >= 0
+            if timestamp is None:
+                timestamp = int(time.time())
+            else:
+                assert type(timestamp) is int and timestamp > 0
+            assert action in ['increment', 'set']
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        # Verify subscription item exists and has a metered plan
+        si = SubscriptionItem._api_retrieve(subscription_item)
+        if si.plan.usage_type != 'metered':
+            raise UserError(
+                400,
+                'Cannot create a usage record for a subscription item with a '
+                'licensed plan. Only metered plans support usage records.'
+            )
+
+        # All exceptions must be raised before this point.
+        super().__init__()
+
+        self.subscription_item = subscription_item
+        self.quantity = quantity
+        self.timestamp = timestamp
+        self.action = action
+        self.livemode = False
+
+    @classmethod
+    def _api_update(cls, id, **data):
+        raise UserError(405, 'Method Not Allowed')
+
+    @classmethod
+    def _api_delete(cls, id):
+        raise UserError(405, 'Method Not Allowed')
+
+    @classmethod
+    def _api_retrieve(cls, id):
+        raise UserError(405, 'Method Not Allowed')
+
+    @classmethod
+    def _api_list_all(cls, url, limit=None, starting_after=None, **kwargs):
+        raise UserError(405, 'Method Not Allowed')
+
+
+class UsageRecordSummary(StripeObject):
+    object = 'usage_record_summary'
+    _id_prefix = 'urs_'
+
+    def __init__(
+        self,
+        subscription_item=None,
+        total_usage=0,
+        period_start=None,
+        period_end=None,
+    ):
+        super().__init__()
+
+        self.subscription_item = subscription_item
+        self.total_usage = total_usage
+        self.invoice = None
+        self.livemode = False
+        self.period = {
+            'start': period_start,
+            'end': period_end,
+        }
+
+    @classmethod
+    def _api_create(cls, **data):
+        raise UserError(405, 'Method Not Allowed')
+
+    @classmethod
+    def _api_update(cls, id, **data):
+        raise UserError(405, 'Method Not Allowed')
+
+    @classmethod
+    def _api_delete(cls, id):
+        raise UserError(405, 'Method Not Allowed')
 
 
 class TaxId(StripeObject):
