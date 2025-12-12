@@ -191,20 +191,18 @@ def get_api_key(request):
     elif header[0] == 'Bearer':
         api_key = header[1]
 
+    # For backwards compatibility, accept any properly formatted secret key
+    # Account context will only be set if the key belongs to a valid account
     if api_key and api_key.startswith('sk_') and len(api_key) > 5:
-        # Validate that the key belongs to a valid account
-        account = Account._api_retrieve_by_key(api_key)
-        if account is not None:
-            return api_key
+        return api_key
     return None
 
 
 def validate_public_key(key):
-    """Validate a public key belongs to a valid account"""
-    if key and key.startswith('pk_') and len(key) > 5:
-        account = Account._api_retrieve_by_key(key)
-        return account is not None
-    return False
+    """Validate a public key format (accepts any pk_test_* for backwards compatibility)"""
+    # For backwards compatibility, accept any properly formatted public key
+    # Account context will only be set if the key belongs to a valid account
+    return key and key.startswith('pk_') and len(key) > 5
 
 
 @web.middleware
