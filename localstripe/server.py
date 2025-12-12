@@ -25,6 +25,7 @@ import socket
 from aiohttp import web
 
 from .resources import (
+    Account,
     BalanceTransaction,
     Charge,
     Coupon,
@@ -184,7 +185,19 @@ def get_api_key(request):
         api_key = header[1]
 
     if api_key and api_key.startswith('sk_') and len(api_key) > 5:
-        return api_key
+        # Validate that the key belongs to a valid account
+        account = Account._api_retrieve_by_key(api_key)
+        if account is not None:
+            return api_key
+    return None
+
+
+def validate_public_key(key):
+    """Validate a public key belongs to a valid account"""
+    if key and key.startswith('pk_') and len(key) > 5:
+        account = Account._api_retrieve_by_key(key)
+        return account is not None
+    return False
 
 
 @web.middleware
@@ -242,7 +255,7 @@ async def auth_middleware(request, handler):
             if (
                 'key' in data
                 and type(data['key']) is str
-                and data['key'].startswith('pk_')
+                and validate_public_key(data['key'])
             ):
                 is_auth = True
 
@@ -589,6 +602,77 @@ async def clear_api_logs_endpoint(request):
     return web.Response()
 
 
+# Account management endpoints
+async def get_accounts(request):
+    """List all accounts"""
+    accounts = Account._api_list_all()
+    return json_response({
+        'object': 'list',
+        'data': [acc._export() for acc in accounts],
+    })
+
+
+async def create_account(request):
+    """Create a new account"""
+    data = await get_post_data(request) or {}
+    name = data.get('name', 'New Account')
+    account = Account(name=name)
+    return json_response(account._export())
+
+
+async def get_account(request):
+    """Get a specific account"""
+    account_id = request.match_info['id']
+    account = Account._api_retrieve(account_id)
+    return json_response(account._export())
+
+
+async def update_account(request):
+    """Update an account"""
+    account_id = request.match_info['id']
+    data = await get_post_data(request) or {}
+    account = Account._api_update(account_id, **data)
+    return json_response(account._export())
+
+
+async def delete_account(request):
+    """Delete an account"""
+    account_id = request.match_info['id']
+    # Ensure we don't delete the last account
+    accounts = Account._api_list_all()
+    if len(accounts) <= 1:
+        raise UserError(400, 'Cannot delete the last account')
+    result = Account._api_delete(account_id)
+    return json_response(result)
+
+
+async def regenerate_account_keys(request):
+    """Regenerate API keys for an account"""
+    import random
+    import string
+
+    account_id = request.match_info['id']
+    account = Account._api_retrieve(account_id)
+
+    # Generate new keys
+    key_suffix = ''.join(
+        random.choice(string.ascii_letters + string.digits)
+        for _ in range(24)
+    )
+    account.public_key = f'pk_test_{key_suffix}'
+
+    key_suffix = ''.join(
+        random.choice(string.ascii_letters + string.digits)
+        for _ in range(24)
+    )
+    account.secret_key = f'sk_test_{key_suffix}'
+
+    # Save to disk
+    store[f'_account:{account_id}'] = account
+
+    return json_response(account._export())
+
+
 # Add all API routes first
 app.router.add_post('/_config/webhooks/{id}', config_webhook)
 app.router.add_get('/_config/webhooks', get_webhooks_config)
@@ -598,6 +682,14 @@ app.router.add_post('/_config/webhook_logs/{log_id}/retry', retry_webhook)
 app.router.add_get('/_config/api_logs', get_api_logs_endpoint)
 app.router.add_delete('/_config/api_logs', clear_api_logs_endpoint)
 app.router.add_delete('/_config/data', flush_store)
+
+# Account management routes
+app.router.add_get('/_config/accounts', get_accounts)
+app.router.add_post('/_config/accounts', create_account)
+app.router.add_get('/_config/accounts/{id}', get_account)
+app.router.add_post('/_config/accounts/{id}', update_account)
+app.router.add_delete('/_config/accounts/{id}', delete_account)
+app.router.add_post('/_config/accounts/{id}/regenerate-keys', regenerate_account_keys)
 
 
 # Static file serving for UI - must be LAST to avoid conflicts
@@ -668,6 +760,9 @@ def start():
 
     if not args.from_scratch:
         store.try_load_from_disk()
+
+    # Ensure at least one account exists
+    Account.ensure_default_account()
 
     # Listen on both IPv4 and IPv6
     sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)

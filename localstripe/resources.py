@@ -76,6 +76,124 @@ class Store(dict):
 store = Store()
 
 
+class Account:
+    """
+    Account model for multi-tenancy support.
+    Each account has its own public and secret API keys.
+    Stored separately from Stripe objects.
+    """
+    object = 'account'
+    _id_prefix = 'acc_'
+
+    def __init__(self, id=None, name=None, public_key=None, secret_key=None):
+        import time
+
+        if id is None:
+            self.id = self._id_prefix + ''.join(
+                random.choice(string.ascii_letters + string.digits)
+                for _ in range(14)
+            )
+        else:
+            self.id = id
+
+        self.name = name or 'Default Account'
+        self.created = int(time.time())
+
+        # Generate API keys if not provided
+        if public_key is None:
+            key_suffix = ''.join(
+                random.choice(string.ascii_letters + string.digits)
+                for _ in range(24)
+            )
+            self.public_key = f'pk_test_{key_suffix}'
+        else:
+            self.public_key = public_key
+
+        if secret_key is None:
+            key_suffix = ''.join(
+                random.choice(string.ascii_letters + string.digits)
+                for _ in range(24)
+            )
+            self.secret_key = f'sk_test_{key_suffix}'
+        else:
+            self.secret_key = secret_key
+
+        # Store in accounts storage
+        key = f'_account:{self.id}'
+        store[key] = self
+
+    @classmethod
+    def _api_list_all(cls):
+        """List all accounts"""
+        accounts = [
+            value for key, value in store.items()
+            if key.startswith('_account:')
+        ]
+        # Sort by created time
+        accounts.sort(key=lambda x: x.created)
+        return accounts
+
+    @classmethod
+    def _api_retrieve(cls, id):
+        """Retrieve an account by ID"""
+        obj = store.get(f'_account:{id}')
+        if obj is None:
+            raise UserError(404, 'Account not found')
+        return obj
+
+    @classmethod
+    def _api_retrieve_by_key(cls, api_key):
+        """Retrieve an account by its public or secret key"""
+        for key, value in store.items():
+            if key.startswith('_account:'):
+                if value.secret_key == api_key or value.public_key == api_key:
+                    return value
+        return None
+
+    @classmethod
+    def _api_update(cls, id, **data):
+        """Update an account"""
+        obj = cls._api_retrieve(id)
+        if 'name' in data:
+            obj.name = data['name']
+        # Re-save to trigger disk persistence
+        store[f'_account:{id}'] = obj
+        return obj
+
+    @classmethod
+    def _api_delete(cls, id):
+        """Delete an account"""
+        key = f'_account:{id}'
+        if key not in store:
+            raise UserError(404, 'Account not found')
+        del store[key]
+        return {'id': id, 'object': 'account', 'deleted': True}
+
+    @classmethod
+    def ensure_default_account(cls):
+        """Ensure at least one account exists, creating a default if needed"""
+        accounts = cls._api_list_all()
+        if not accounts:
+            # Create a default account with the legacy test keys for backward compatibility
+            return cls(
+                name='Default Account',
+                public_key='pk_test_12345',
+                secret_key='sk_test_12345'
+            )
+        return accounts[0]
+
+    def _export(self):
+        """Export account data for API response"""
+        return {
+            'id': self.id,
+            'object': self.object,
+            'name': self.name,
+            'public_key': self.public_key,
+            'secret_key': self.secret_key,
+            'created': self.created,
+        }
+
+
 def random_id(n):
     return ''.join(
         random.choice(string.ascii_letters + string.digits) for i in range(n)
