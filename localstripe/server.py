@@ -82,7 +82,8 @@ async def add_cors_headers(request, response):
     if origin:
         response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Headers'] = (
-            'Content-Type, Accept, Authorization, X-LocalStripe-UI, X-Requested-With'
+            'Content-Type, Accept, Authorization, X-LocalStripe-UI, '
+            'X-Requested-With'
         )
         response.headers['Access-Control-Allow-Methods'] = (
             'GET, POST, PUT, PATCH, DELETE, OPTIONS'
@@ -199,7 +200,7 @@ def get_api_key(request):
 
 
 def validate_public_key(key):
-    """Validate a public key format (accepts any pk_test_* for backwards compatibility)"""
+    """Validate a public key format (accepts any pk_test_*)"""
     # For backwards compatibility, accept any properly formatted public key
     # Account context will only be set if the key belongs to a valid account
     return key and key.startswith('pk_') and len(key) > 5
@@ -326,7 +327,7 @@ async def api_logging_middleware(request, handler):
     if request.headers.get('X-LocalStripe-UI') == 'true':
         return await handler(request)
 
-    # Skip logging for internal config endpoints (except api_logs fetching), static files, and UI routes
+    # Skip logging for config endpoints, static files, and UI routes
     if (
         request.path.startswith('/_config/api_logs')
         or request.path.startswith('/_config/webhooks')
@@ -622,7 +623,7 @@ async def get_webhook_logs(request):
     sorted_logs = sorted(filtered_logs, key=lambda x: x.created, reverse=True)
 
     # Apply pagination
-    paginated_logs = sorted_logs[offset : offset + limit]
+    paginated_logs = sorted_logs[offset:offset + limit]
 
     # Convert to dict format
     logs_data = [log.to_dict() for log in paginated_logs]
@@ -670,7 +671,7 @@ async def delete_webhook_config(request):
     account = get_account_from_request(request)
     account_id = account.id if account else None
 
-    # Only allow deleting webhooks that belong to this account or have no account
+    # Only allow deleting webhooks belonging to this account
     if webhook.account_id is not None and webhook.account_id != account_id:
         raise UserError(404, 'Webhook not found')
 
@@ -737,7 +738,7 @@ async def get_api_logs_endpoint(request):
 
 
 async def clear_api_logs_endpoint(request):
-    """Clear all API logs, or only for the current account if account_only=true"""
+    """Clear all API logs, or only for the current account"""
     data = unflatten_data(request.query)
     account_only = data.get('account_only', 'false').lower() == 'true'
 
@@ -821,7 +822,8 @@ async def delete_account(request):
     deleted_counts['webhooks'] = delete_webhooks_for_account(account_id)
 
     # Delete webhook logs for this account
-    deleted_counts['webhook_logs'] = delete_webhook_logs_for_account(account_id)
+    deleted_counts['webhook_logs'] = \
+        delete_webhook_logs_for_account(account_id)
 
     # Delete API logs for this account
     clear_api_logs(account_id=account_id)
@@ -876,7 +878,8 @@ app.router.add_post('/_config/accounts', create_account)
 app.router.add_get('/_config/accounts/{id}', get_account)
 app.router.add_post('/_config/accounts/{id}', update_account)
 app.router.add_delete('/_config/accounts/{id}', delete_account)
-app.router.add_post('/_config/accounts/{id}/regenerate-keys', regenerate_account_keys)
+app.router.add_post(
+    '/_config/accounts/{id}/regenerate-keys', regenerate_account_keys)
 
 
 # Static file serving for UI - must be LAST to avoid conflicts

@@ -23,7 +23,8 @@ _api_logs = deque(maxlen=1000)
 
 
 class APILog:
-    def __init__(self, method, path, query_params=None, request_body=None, account_id=None):
+    def __init__(self, method, path, query_params=None, request_body=None,
+                 account_id=None):
         self.id = 'log_' + str(uuid.uuid4()).replace('-', '')[:24]
         self.method = method
         self.path = path
@@ -143,7 +144,8 @@ class APILog:
         }
 
 
-def create_api_log(method, path, query_params=None, request_body=None, account_id=None):
+def create_api_log(method, path, query_params=None, request_body=None,
+                   account_id=None):
     """Create a new API log entry"""
     log = APILog(method, path, query_params, request_body, account_id)
     _api_logs.append(log)
@@ -173,7 +175,7 @@ def get_api_logs(
     if object_id:
         logs = [log for log in logs if log.object_id == object_id]
     if account_id:
-        # Filter by account - show logs for this account or logs without account (legacy)
+        # Filter by account - show logs for this account or legacy logs
         logs = [
             log for log in logs
             if log.account_id is None or log.account_id == account_id
@@ -184,7 +186,7 @@ def get_api_logs(
 
     # Apply pagination
     total_count = len(logs)
-    logs = logs[offset : offset + limit]
+    logs = logs[offset:offset + limit]
 
     return {
         'object': 'list',

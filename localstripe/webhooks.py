@@ -89,7 +89,7 @@ async def _send_webhook(event, max_retries=3):
     event_account_id = getattr(event, '_account_id', None)
 
     for webhook_id, webhook in _webhooks.items():
-        # Filter by account: only trigger webhooks that belong to the same account
+        # Filter by account: only trigger webhooks belonging to same account
         # or webhooks without an account (legacy/global webhooks)
         if webhook.account_id is not None and event_account_id is not None:
             if webhook.account_id != event_account_id:
@@ -143,14 +143,14 @@ async def _send_webhook(event, max_retries=3):
 
                         if r.status >= 200 and r.status < 300:
                             logger.info(
-                                'webhook "%s" successfully delivered to %s (attempt %d)'
+                                'webhook "%s" delivered to %s (attempt %d)'
                                 % (event.type, webhook.url, attempt)
                             )
                             break  # Success, don't retry
                         else:
                             webhook_log.error_message = f'HTTP {r.status}'
                             logger.info(
-                                'webhook "%s" failed with response code %d (attempt %d)'
+                                'webhook "%s" failed code %d (attempt %d)'
                                 % (event.type, r.status, attempt)
                             )
 
@@ -204,7 +204,7 @@ async def _send_webhook(event, max_retries=3):
                 webhook_log.status_code = 0
                 webhook_log.error_message = f'Unexpected error: {str(e)}'
                 logger.error(
-                    'webhook "%s" failed with unexpected error: %s (attempt %d)'
+                    'webhook "%s" error: %s (attempt %d)'
                     % (event.type, e, attempt)
                 )
 
@@ -220,7 +220,6 @@ def schedule_webhook(event):
 
 def delete_webhooks_for_account(account_id):
     """Delete all webhooks belonging to a specific account"""
-    global _webhooks
     keys_to_delete = [
         webhook_id for webhook_id, webhook in _webhooks.items()
         if webhook.account_id == account_id

@@ -174,7 +174,7 @@ class Account:
         """Ensure at least one account exists, creating a default if needed"""
         accounts = cls._api_list_all()
         if not accounts:
-            # Create a default account with the legacy test keys for backward compatibility
+            # Create default account with legacy test keys for compatibility
             return cls(
                 name='Default Account',
                 public_key='pk_test_12345',
@@ -311,7 +311,7 @@ class StripeObject(object):
         if obj is None:
             raise UserError(404, 'Not Found')
 
-        # Check account ownership (if object has account and context has account)
+        # Check account ownership
         current_account = get_current_account_id()
         obj_account = getattr(obj, '_account_id', None)
         if current_account and obj_account and obj_account != current_account:
@@ -328,7 +328,7 @@ class StripeObject(object):
 
     @classmethod
     def _api_delete(cls, id):
-        obj = cls._api_retrieve(id)  # This validates account ownership
+        cls._api_retrieve(id)  # Validates existence and account ownership
         key = cls.object + ':' + id
         del store[key]
         return DeletedObject(id, cls.object)
@@ -2275,7 +2275,7 @@ class List(StripeObject):
         return [
             item._export()
             for item in self._list[
-                self._starting_pos : self._starting_pos + self._limit
+                self._starting_pos:self._starting_pos + self._limit
             ]
         ]
 
@@ -2367,7 +2367,7 @@ class PaymentIntent(StripeObject):
         self.next_action = None
         self.capture_method = capture_method or 'automatic_async'
         self.setup_future_usage = setup_future_usage
-        # amount_refunded is calculated from associated charges, don't set directly
+        # amount_refunded is calculated from associated charges
 
         self._canceled = False
         self._authentication_failed = False
@@ -3405,7 +3405,7 @@ class Price(StripeObject):
         except AssertionError:
             raise UserError(400, 'Bad request')
 
-        # Simple search implementation - in a real implementation this would be more sophisticated
+        # Simple search implementation
         all_prices = cls._api_list_all('/v1/prices', limit=1000)._list
 
         if query:
@@ -3437,7 +3437,7 @@ class Price(StripeObject):
             except (ValueError, TypeError):
                 start_idx = 0
 
-        prices = all_prices[start_idx : start_idx + limit]
+        prices = all_prices[start_idx:start_idx + limit]
 
         # Create a SearchResult as a List object
         result = List('/v1/prices/search')
