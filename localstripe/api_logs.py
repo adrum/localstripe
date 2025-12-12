@@ -194,6 +194,14 @@ def get_api_logs(
     }
 
 
-def clear_api_logs():
-    """Clear all API logs"""
-    _api_logs.clear()
+def clear_api_logs(account_id=None):
+    """Clear API logs, optionally only for a specific account"""
+    global _api_logs
+    if account_id:
+        # Filter out logs belonging to this account, keep others
+        _api_logs = deque(
+            (log for log in _api_logs if log.account_id != account_id),
+            maxlen=1000
+        )
+    else:
+        _api_logs.clear()

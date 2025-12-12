@@ -734,8 +734,18 @@ async def get_api_logs_endpoint(request):
 
 
 async def clear_api_logs_endpoint(request):
-    """Clear all API logs"""
-    clear_api_logs()
+    """Clear all API logs, or only for the current account if account_only=true"""
+    data = unflatten_data(request.query)
+    account_only = data.get('account_only', 'false').lower() == 'true'
+
+    if account_only:
+        account = get_account_from_request(request)
+        if account:
+            clear_api_logs(account_id=account.id)
+        # If no account found, clear nothing (safer behavior)
+    else:
+        clear_api_logs()
+
     return web.Response()
 
 

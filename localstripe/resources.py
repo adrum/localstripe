@@ -439,7 +439,8 @@ class DeletedObject(StripeObject):
 class Balance(object):
     object = 'balance'
 
-    def __init__(self):
+    def __init__(self, account_id=None):
+        self._account_id = account_id or get_current_account_id()
         self.livemode = False
         self.available = {
             'amount': 2000,
@@ -452,12 +453,30 @@ class Balance(object):
             'source_types': {'card': 0},
         }
 
-        store[self.object] = self
+        # Store with account-specific key
+        store_key = self._get_store_key(self._account_id)
+        store[store_key] = self
 
         schedule_webhook(Event('balance.available', self))
 
     @classmethod
+    def _get_store_key(cls, account_id=None):
+        """Get the store key for a balance, optionally scoped to an account"""
+        if account_id:
+            return f'{cls.object}:{account_id}'
+        return cls.object
+
+    @classmethod
     def _api_retrieve(cls):
+        account_id = get_current_account_id()
+        # Try account-specific balance first
+        if account_id:
+            store_key = cls._get_store_key(account_id)
+            obj = store.get(store_key)
+            if obj is None:
+                return cls(account_id=account_id)
+            return obj
+        # Fall back to global balance for backwards compatibility
         obj = store.get(cls.object)
         if obj is None:
             return cls()
