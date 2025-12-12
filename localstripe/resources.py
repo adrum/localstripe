@@ -238,10 +238,42 @@ def try_convert_to_float(arg):
 extra_apis = []
 
 
+# Global variable to hold the current request's account ID
+# This is set by the server before handling each request
+_current_account_id = None
+
+
+def set_current_account_id(account_id):
+    """Set the account ID for the current request context"""
+    global _current_account_id
+    _current_account_id = account_id
+
+
+def get_current_account_id():
+    """Get the account ID for the current request context"""
+    return _current_account_id
+
+
+def _object_belongs_to_account(obj, account_id):
+    """Check if an object belongs to the given account.
+
+    Returns True if:
+    - No account context is set (account_id is None) - show all objects
+    - Object has no account (legacy data) - show to all accounts
+    - Object's account matches the given account
+    """
+    if account_id is None:
+        return True
+    obj_account = getattr(obj, '_account_id', None)
+    if obj_account is None:
+        return True  # Legacy data without account association
+    return obj_account == account_id
+
+
 class StripeObject(object):
     object = None
 
-    def __init__(self, id=None):
+    def __init__(self, id=None, _account_id=None):
         if not isinstance(self, List):
             if id is None:
                 assert hasattr(self, '_id_prefix')
@@ -252,6 +284,9 @@ class StripeObject(object):
             self.created = int(time.time())
 
             self.livemode = False
+
+            # Store account association (uses global context if not provided)
+            self._account_id = _account_id or get_current_account_id()
 
             key = self.object + ':' + self.id
             if key in store.keys():
@@ -276,19 +311,25 @@ class StripeObject(object):
         if obj is None:
             raise UserError(404, 'Not Found')
 
+        # Check account ownership (if object has account and context has account)
+        current_account = get_current_account_id()
+        obj_account = getattr(obj, '_account_id', None)
+        if current_account and obj_account and obj_account != current_account:
+            # Object belongs to a different account - treat as not found
+            raise UserError(404, 'Not Found')
+
         return obj
 
     @classmethod
     def _api_update(cls, id, **data):
-        obj = cls._api_retrieve(id)
+        obj = cls._api_retrieve(id)  # This validates account ownership
         obj._update(**data)
         return obj
 
     @classmethod
     def _api_delete(cls, id):
+        obj = cls._api_retrieve(id)  # This validates account ownership
         key = cls.object + ':' + id
-        if key not in store.keys():
-            raise UserError(404, 'Not Found')
         del store[key]
         return DeletedObject(id, cls.object)
 
@@ -297,11 +338,14 @@ class StripeObject(object):
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
+        current_account = get_current_account_id()
+
         li = List(url, limit=limit, starting_after=starting_after)
         li._list = [
             value
             for key, value in store.items()
             if key.startswith(cls.object + ':')
+            and _object_belongs_to_account(value, current_account)
         ]
         return li
 

@@ -48,6 +48,7 @@ from .resources import (
     Token,
     extra_apis,
     store,
+    set_current_account_id,
 )
 from .errors import UserError
 from .webhooks import register_webhook, _webhook_logs
@@ -266,6 +267,46 @@ async def auth_middleware(request, handler):
 
 
 @web.middleware
+async def account_context_middleware(request, handler):
+    """Set the account context for the current request based on API key."""
+    # Reset account context at start of each request
+    set_current_account_id(None)
+
+    # Skip for non-API routes
+    if (
+        request.path.startswith('/_config/')
+        or request.path.startswith('/js.stripe.com/')
+        or request.path == '/'
+        or request.path.startswith('/assets/')
+    ):
+        return await handler(request)
+
+    # Try to get account from secret key in Authorization header
+    api_key = get_api_key(request)
+    if api_key:
+        account = Account._api_retrieve_by_key(api_key)
+        if account:
+            set_current_account_id(account.id)
+    else:
+        # Try to get account from public key in POST data
+        if request.method == 'POST':
+            try:
+                data = await get_post_data(request, remove_auth=False)
+                if data and 'key' in data and type(data['key']) is str:
+                    account = Account._api_retrieve_by_key(data['key'])
+                    if account:
+                        set_current_account_id(account.id)
+            except Exception:
+                pass
+
+    try:
+        return await handler(request)
+    finally:
+        # Clear account context after request
+        set_current_account_id(None)
+
+
+@web.middleware
 async def save_store_middleware(request, handler):
     try:
         return await handler(request)
@@ -353,6 +394,7 @@ app = web.Application(
     middlewares=[
         error_middleware,
         auth_middleware,
+        account_context_middleware,
         api_logging_middleware,
         save_store_middleware,
     ]
