@@ -25,6 +25,10 @@ dev = [
     "doc8",
     "flake8",
     "flake8-import-order",
+    "pytest >=7.0",
+]
+postgres = [
+    "psycopg2-binary >=2.9.0",
 ]
 
 [project.scripts]

@@ -17,15 +17,15 @@ import asyncio
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import hashlib
-import os
-import pickle
 import random
 import re
 import string
 import time
+from typing import Any, Iterator
 
 from dateutil.relativedelta import relativedelta
 
+from .backends import get_backend, StorageBackend
 from .errors import UserError
 from .webhooks import schedule_webhook
 
@@ -35,42 +35,85 @@ from .webhooks import schedule_webhook
 _type = type
 
 
-class Store(dict):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.disk_path = os.environ.get(
-            'LOCALSTRIPE_DISK_PATH', '/tmp/localstripe.pickle'
-        )
+class Store:
+    """A dict-like store backed by a configurable storage backend.
 
-    def try_load_from_disk(self):
-        if not hasattr(self, 'disk_path'):
-            self.disk_path = os.environ.get(
-                'LOCALSTRIPE_DISK_PATH', '/tmp/localstripe.pickle'
-            )
-        try:
-            with open(self.disk_path, 'rb') as f:
-                old = pickle.load(f)
-                self.clear()
-                self.update(old)
-        except FileNotFoundError:
-            pass
+    This class provides a dict-like interface for storing LocalStripe
+    objects, while delegating actual storage to a pluggable backend.
 
-    def dump_to_disk(self):
-        if not hasattr(self, 'disk_path'):
-            self.disk_path = os.environ.get(
-                'LOCALSTRIPE_DISK_PATH', '/tmp/localstripe.pickle'
-            )
-        os.makedirs(os.path.dirname(self.disk_path), exist_ok=True)
-        with open(self.disk_path, 'wb') as f:
-            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+    Supported backends (via LOCALSTRIPE_BACKEND env var):
+        - 'pickle' (default): File-based pickle storage
+        - 'sqlite': SQLite database storage
+        - 'postgres': PostgreSQL database storage
+    """
 
-    def __setitem__(self, *args, **kwargs):
-        super().__setitem__(*args, **kwargs)
-        self.dump_to_disk()
+    def __init__(self, backend: StorageBackend | None = None):
+        self._backend = backend
 
-    def __delitem__(self, *args, **kwargs):
-        super().__delitem__(*args, **kwargs)
-        self.dump_to_disk()
+    def _ensure_backend(self) -> StorageBackend:
+        """Lazily initialize the backend on first access."""
+        if self._backend is None:
+            self._backend = get_backend()
+        return self._backend
+
+    def try_load_from_disk(self) -> None:
+        """Load data from persistent storage."""
+        self._ensure_backend().load()
+
+    def dump_to_disk(self) -> None:
+        """Save data to persistent storage."""
+        self._ensure_backend().save()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get a value by key."""
+        result = self._ensure_backend().get(key)
+        return result if result is not None else default
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        """Store a value by key."""
+        self._ensure_backend().set(key, value)
+
+    def __getitem__(self, key: str) -> Any:
+        """Get a value by key."""
+        result = self._ensure_backend().get(key)
+        if result is None:
+            raise KeyError(key)
+        return result
+
+    def __delitem__(self, key: str) -> None:
+        """Delete a value by key."""
+        self._ensure_backend().delete(key)
+
+    def __contains__(self, key: object) -> bool:
+        """Check if a key exists."""
+        if not isinstance(key, str):
+            return False
+        return key in self._ensure_backend()
+
+    def __len__(self) -> int:
+        """Return the number of items."""
+        return len(self._ensure_backend())
+
+    def keys(self) -> Iterator[str]:
+        """Return an iterator over keys."""
+        return self._ensure_backend().keys()
+
+    def values(self) -> Iterator[Any]:
+        """Return an iterator over values."""
+        return self._ensure_backend().values()
+
+    def items(self) -> Iterator[tuple[str, Any]]:
+        """Return an iterator over (key, value) pairs."""
+        return self._ensure_backend().items()
+
+    def clear(self) -> None:
+        """Remove all items."""
+        self._ensure_backend().clear()
+
+    def close(self) -> None:
+        """Close the backend connection."""
+        if self._backend is not None:
+            self._backend.close()
 
 
 store = Store()
