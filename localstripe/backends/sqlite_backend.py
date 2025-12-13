@@ -88,9 +88,9 @@ class SQLiteBackend(StorageBackend):
                 CREATE TABLE IF NOT EXISTS "{table}" (
                     id TEXT PRIMARY KEY,
                     account_id TEXT,
+                    data TEXT NOT NULL,
                     created_at INTEGER NOT NULL,
-                    updated_at INTEGER NOT NULL,
-                    data TEXT NOT NULL
+                    updated_at INTEGER NOT NULL
                 )
             ''')
             conn.execute(
@@ -156,14 +156,14 @@ class SQLiteBackend(StorageBackend):
         conn = self._ensure_connection()
         conn.execute(
             f'''
-            INSERT INTO "{table}" (id, account_id, created_at, updated_at, data)
+            INSERT INTO "{table}" (id, account_id, data, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 account_id = excluded.account_id,
-                updated_at = excluded.updated_at,
-                data = excluded.data
+                data = excluded.data,
+                updated_at = excluded.updated_at
             ''',
-            (object_id, account_id, now, now, data_json),
+            (object_id, account_id, data_json, now, now),
         )
         conn.commit()
 

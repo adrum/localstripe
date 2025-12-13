@@ -101,9 +101,9 @@ class PostgresBackend(StorageBackend):
                     CREATE TABLE IF NOT EXISTS {} (
                         id TEXT PRIMARY KEY,
                         account_id TEXT,
+                        data JSONB NOT NULL,
                         created_at BIGINT NOT NULL,
-                        updated_at BIGINT NOT NULL,
-                        data JSONB NOT NULL
+                        updated_at BIGINT NOT NULL
                     )
                 ''').format(sql.Identifier(table)))
 
@@ -180,14 +180,14 @@ class PostgresBackend(StorageBackend):
         with conn.cursor() as cur:
             cur.execute(
                 sql.SQL('''
-                    INSERT INTO {} (id, account_id, created_at, updated_at, data)
+                    INSERT INTO {} (id, account_id, data, created_at, updated_at)
                     VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (id) DO UPDATE SET
                         account_id = EXCLUDED.account_id,
-                        updated_at = EXCLUDED.updated_at,
-                        data = EXCLUDED.data
+                        data = EXCLUDED.data,
+                        updated_at = EXCLUDED.updated_at
                 ''').format(sql.Identifier(table)),
-                (object_id, account_id, now, now, Json(data)),
+                (object_id, account_id, Json(data), now, now),
             )
             conn.commit()
 
