@@ -1,15 +1,26 @@
 // In development, use relative URLs to leverage Vite proxy
 // In production, use the full URL
 const API_BASE = import.meta.env.DEV ? '' : 'http://localhost:8420';
-const API_KEY = 'sk_test_12345'; // Default test key for localstripe
+const DEFAULT_API_KEY = 'sk_test_12345'; // Default test key for localstripe (backwards compatibility)
+
+// Global API key getter that can be updated by AccountContext
+let currentApiKey: string = DEFAULT_API_KEY;
+
+export const setApiKey = (key: string) => {
+  currentApiKey = key;
+};
+
+export const getApiKey = () => currentApiKey;
 
 class LocalStripeAPI {
   private baseURL: string;
-  private apiKey: string;
 
-  constructor(baseURL = API_BASE, apiKey = API_KEY) {
+  constructor(baseURL = API_BASE) {
     this.baseURL = baseURL;
-    this.apiKey = apiKey;
+  }
+
+  private get apiKey(): string {
+    return currentApiKey;
   }
 
   private async request<T>(
