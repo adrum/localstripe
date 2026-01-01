@@ -16,7 +16,6 @@
 import asyncio
 import logging
 import time
-from datetime import datetime
 from typing import Callable, List, Optional
 
 logger = logging.getLogger('localstripe.background_tasks')
@@ -115,19 +114,9 @@ async def process_metered_billing():
     """
     from .resources import (
         store,
-        Subscription,
-        Customer,
-        BillingMeter,
-        BillingMeterEvent,
-        Invoice,
-        InvoiceItem,
         Price,
-        Event,
-        get_current_account_id,
         set_current_account_id,
-        _object_belongs_to_account,
     )
-    from .webhooks import schedule_webhook
 
     current_time = int(time.time())
 
@@ -265,8 +254,6 @@ async def finalize_pending_invoices():
     """
     from .resources import (
         store,
-        Invoice,
-        get_current_account_id,
         set_current_account_id,
     )
 
