@@ -17,15 +17,15 @@ import asyncio
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import hashlib
-import os
-import pickle
 import random
 import re
 import string
 import time
+from typing import Any, Iterator
 
 from dateutil.relativedelta import relativedelta
 
+from .backends import get_backend, StorageBackend
 from .errors import UserError
 from .webhooks import schedule_webhook
 
@@ -35,45 +35,206 @@ from .webhooks import schedule_webhook
 _type = type
 
 
-class Store(dict):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.disk_path = os.environ.get(
-            'LOCALSTRIPE_DISK_PATH', '/tmp/localstripe.pickle'
-        )
+class Store:
+    """A dict-like store backed by a configurable storage backend.
 
-    def try_load_from_disk(self):
-        if not hasattr(self, 'disk_path'):
-            self.disk_path = os.environ.get(
-                'LOCALSTRIPE_DISK_PATH', '/tmp/localstripe.pickle'
-            )
-        try:
-            with open(self.disk_path, 'rb') as f:
-                old = pickle.load(f)
-                self.clear()
-                self.update(old)
-        except FileNotFoundError:
-            pass
+    This class provides a dict-like interface for storing LocalStripe
+    objects, while delegating actual storage to a pluggable backend.
 
-    def dump_to_disk(self):
-        if not hasattr(self, 'disk_path'):
-            self.disk_path = os.environ.get(
-                'LOCALSTRIPE_DISK_PATH', '/tmp/localstripe.pickle'
-            )
-        os.makedirs(os.path.dirname(self.disk_path), exist_ok=True)
-        with open(self.disk_path, 'wb') as f:
-            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+    Supported backends (via LOCALSTRIPE_BACKEND env var):
+        - 'pickle' (default): File-based pickle storage
+        - 'sqlite': SQLite database storage
+        - 'postgres': PostgreSQL database storage
+    """
 
-    def __setitem__(self, *args, **kwargs):
-        super().__setitem__(*args, **kwargs)
-        self.dump_to_disk()
+    def __init__(self, backend: StorageBackend | None = None):
+        self._backend = backend
 
-    def __delitem__(self, *args, **kwargs):
-        super().__delitem__(*args, **kwargs)
-        self.dump_to_disk()
+    def _ensure_backend(self) -> StorageBackend:
+        """Lazily initialize the backend on first access."""
+        if self._backend is None:
+            self._backend = get_backend()
+        return self._backend
+
+    def try_load_from_disk(self) -> None:
+        """Load data from persistent storage."""
+        self._ensure_backend().load()
+
+    def dump_to_disk(self) -> None:
+        """Save data to persistent storage."""
+        self._ensure_backend().save()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get a value by key."""
+        result = self._ensure_backend().get(key)
+        return result if result is not None else default
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        """Store a value by key."""
+        self._ensure_backend().set(key, value)
+
+    def __getitem__(self, key: str) -> Any:
+        """Get a value by key."""
+        result = self._ensure_backend().get(key)
+        if result is None:
+            raise KeyError(key)
+        return result
+
+    def __delitem__(self, key: str) -> None:
+        """Delete a value by key."""
+        self._ensure_backend().delete(key)
+
+    def __contains__(self, key: object) -> bool:
+        """Check if a key exists."""
+        if not isinstance(key, str):
+            return False
+        return key in self._ensure_backend()
+
+    def __len__(self) -> int:
+        """Return the number of items."""
+        return len(self._ensure_backend())
+
+    def keys(self) -> Iterator[str]:
+        """Return an iterator over keys."""
+        return self._ensure_backend().keys()
+
+    def values(self) -> Iterator[Any]:
+        """Return an iterator over values."""
+        return self._ensure_backend().values()
+
+    def items(self) -> Iterator[tuple[str, Any]]:
+        """Return an iterator over (key, value) pairs."""
+        return self._ensure_backend().items()
+
+    def clear(self) -> None:
+        """Remove all items."""
+        self._ensure_backend().clear()
+
+    def close(self) -> None:
+        """Close the backend connection."""
+        if self._backend is not None:
+            self._backend.close()
 
 
 store = Store()
+
+
+class Account:
+    """
+    Account model for multi-tenancy support.
+    Each account has its own public and secret API keys.
+    Stored separately from Stripe objects.
+    """
+    object = 'account'
+    _id_prefix = 'acc_'
+
+    def __init__(self, id=None, name=None, public_key=None, secret_key=None):
+        import time
+
+        if id is None:
+            self.id = self._id_prefix + ''.join(
+                random.choice(string.ascii_letters + string.digits)
+                for _ in range(14)
+            )
+        else:
+            self.id = id
+
+        self.name = name or 'Default Account'
+        self.created = int(time.time())
+
+        # Generate API keys if not provided
+        if public_key is None:
+            key_suffix = ''.join(
+                random.choice(string.ascii_letters + string.digits)
+                for _ in range(24)
+            )
+            self.public_key = f'pk_test_{key_suffix}'
+        else:
+            self.public_key = public_key
+
+        if secret_key is None:
+            key_suffix = ''.join(
+                random.choice(string.ascii_letters + string.digits)
+                for _ in range(24)
+            )
+            self.secret_key = f'sk_test_{key_suffix}'
+        else:
+            self.secret_key = secret_key
+
+        # Store in accounts storage
+        key = f'_account:{self.id}'
+        store[key] = self
+
+    @classmethod
+    def _api_list_all(cls):
+        """List all accounts"""
+        accounts = [
+            value for key, value in store.items()
+            if key.startswith('_account:')
+        ]
+        # Sort by created time
+        accounts.sort(key=lambda x: x.created)
+        return accounts
+
+    @classmethod
+    def _api_retrieve(cls, id):
+        """Retrieve an account by ID"""
+        obj = store.get(f'_account:{id}')
+        if obj is None:
+            raise UserError(404, 'Account not found')
+        return obj
+
+    @classmethod
+    def _api_retrieve_by_key(cls, api_key):
+        """Retrieve an account by its public or secret key"""
+        for key, value in store.items():
+            if key.startswith('_account:'):
+                if value.secret_key == api_key or value.public_key == api_key:
+                    return value
+        return None
+
+    @classmethod
+    def _api_update(cls, id, **data):
+        """Update an account"""
+        obj = cls._api_retrieve(id)
+        if 'name' in data:
+            obj.name = data['name']
+        # Re-save to trigger disk persistence
+        store[f'_account:{id}'] = obj
+        return obj
+
+    @classmethod
+    def _api_delete(cls, id):
+        """Delete an account"""
+        key = f'_account:{id}'
+        if key not in store:
+            raise UserError(404, 'Account not found')
+        del store[key]
+        return {'id': id, 'object': 'account', 'deleted': True}
+
+    @classmethod
+    def ensure_default_account(cls):
+        """Ensure at least one account exists, creating a default if needed"""
+        accounts = cls._api_list_all()
+        if not accounts:
+            # Create default account with legacy test keys for compatibility
+            return cls(
+                name='Default Account',
+                public_key='pk_test_12345',
+                secret_key='sk_test_12345'
+            )
+        return accounts[0]
+
+    def _export(self):
+        """Export account data for API response"""
+        return {
+            'id': self.id,
+            'object': self.object,
+            'name': self.name,
+            'public_key': self.public_key,
+            'secret_key': self.secret_key,
+            'created': self.created,
+        }
 
 
 def random_id(n):
@@ -120,10 +281,42 @@ def try_convert_to_float(arg):
 extra_apis = []
 
 
+# Global variable to hold the current request's account ID
+# This is set by the server before handling each request
+_current_account_id = None
+
+
+def set_current_account_id(account_id):
+    """Set the account ID for the current request context"""
+    global _current_account_id
+    _current_account_id = account_id
+
+
+def get_current_account_id():
+    """Get the account ID for the current request context"""
+    return _current_account_id
+
+
+def _object_belongs_to_account(obj, account_id):
+    """Check if an object belongs to the given account.
+
+    Returns True if:
+    - No account context is set (account_id is None) - show all objects
+    - Object has no account (legacy data) - show to all accounts
+    - Object's account matches the given account
+    """
+    if account_id is None:
+        return True
+    obj_account = getattr(obj, '_account_id', None)
+    if obj_account is None:
+        return True  # Legacy data without account association
+    return obj_account == account_id
+
+
 class StripeObject(object):
     object = None
 
-    def __init__(self, id=None):
+    def __init__(self, id=None, _account_id=None):
         if not isinstance(self, List):
             if id is None:
                 assert hasattr(self, '_id_prefix')
@@ -134,6 +327,9 @@ class StripeObject(object):
             self.created = int(time.time())
 
             self.livemode = False
+
+            # Store account association (uses global context if not provided)
+            self._account_id = _account_id or get_current_account_id()
 
             key = self.object + ':' + self.id
             if key in store.keys():
@@ -158,19 +354,25 @@ class StripeObject(object):
         if obj is None:
             raise UserError(404, 'Not Found')
 
+        # Check account ownership
+        current_account = get_current_account_id()
+        obj_account = getattr(obj, '_account_id', None)
+        if current_account and obj_account and obj_account != current_account:
+            # Object belongs to a different account - treat as not found
+            raise UserError(404, 'Not Found')
+
         return obj
 
     @classmethod
     def _api_update(cls, id, **data):
-        obj = cls._api_retrieve(id)
+        obj = cls._api_retrieve(id)  # This validates account ownership
         obj._update(**data)
         return obj
 
     @classmethod
     def _api_delete(cls, id):
+        cls._api_retrieve(id)  # Validates existence and account ownership
         key = cls.object + ':' + id
-        if key not in store.keys():
-            raise UserError(404, 'Not Found')
         del store[key]
         return DeletedObject(id, cls.object)
 
@@ -179,11 +381,14 @@ class StripeObject(object):
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
+        current_account = get_current_account_id()
+
         li = List(url, limit=limit, starting_after=starting_after)
         li._list = [
             value
             for key, value in store.items()
             if key.startswith(cls.object + ':')
+            and _object_belongs_to_account(value, current_account)
         ]
         return li
 
@@ -277,7 +482,8 @@ class DeletedObject(StripeObject):
 class Balance(object):
     object = 'balance'
 
-    def __init__(self):
+    def __init__(self, account_id=None):
+        self._account_id = account_id or get_current_account_id()
         self.livemode = False
         self.available = {
             'amount': 2000,
@@ -290,12 +496,30 @@ class Balance(object):
             'source_types': {'card': 0},
         }
 
-        store[self.object] = self
+        # Store with account-specific key
+        store_key = self._get_store_key(self._account_id)
+        store[store_key] = self
 
         schedule_webhook(Event('balance.available', self))
 
     @classmethod
+    def _get_store_key(cls, account_id=None):
+        """Get the store key for a balance, optionally scoped to an account"""
+        if account_id:
+            return f'{cls.object}:{account_id}'
+        return cls.object
+
+    @classmethod
     def _api_retrieve(cls):
+        account_id = get_current_account_id()
+        # Try account-specific balance first
+        if account_id:
+            store_key = cls._get_store_key(account_id)
+            obj = store.get(store_key)
+            if obj is None:
+                return cls(account_id=account_id)
+            return obj
+        # Fall back to global balance for backwards compatibility
         obj = store.get(cls.object)
         if obj is None:
             return cls()
@@ -2094,7 +2318,7 @@ class List(StripeObject):
         return [
             item._export()
             for item in self._list[
-                self._starting_pos : self._starting_pos + self._limit
+                self._starting_pos:self._starting_pos + self._limit
             ]
         ]
 
@@ -2186,7 +2410,7 @@ class PaymentIntent(StripeObject):
         self.next_action = None
         self.capture_method = capture_method or 'automatic_async'
         self.setup_future_usage = setup_future_usage
-        # amount_refunded is calculated from associated charges, don't set directly
+        # amount_refunded is calculated from associated charges
 
         self._canceled = False
         self._authentication_failed = False
@@ -3237,7 +3461,7 @@ class Price(StripeObject):
         except AssertionError:
             raise UserError(400, 'Bad request')
 
-        # Simple search implementation - in a real implementation this would be more sophisticated
+        # Simple search implementation
         all_prices = cls._api_list_all('/v1/prices', limit=1000)._list
 
         if query:
@@ -3269,7 +3493,7 @@ class Price(StripeObject):
             except (ValueError, TypeError):
                 start_idx = 0
 
-        prices = all_prices[start_idx : start_idx + limit]
+        prices = all_prices[start_idx:start_idx + limit]
 
         # Create a SearchResult as a List object
         result = List('/v1/prices/search')
