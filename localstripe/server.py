@@ -27,6 +27,8 @@ from aiohttp import web
 from .resources import (
     Account,
     BalanceTransaction,
+    BillingMeter,
+    BillingMeterEvent,
     Charge,
     Coupon,
     Customer,
@@ -516,6 +518,21 @@ for cls in (
     ):
         app.router.add_route(method, url, func(cls, url))
 
+# Billing meters use a different URL structure: /v1/billing/meters
+for method, url, func in (
+    ('POST', '/v1/billing/meters', api_create),
+    ('GET', '/v1/billing/meters/{id}', api_retrieve),
+    ('POST', '/v1/billing/meters/{id}', api_update),
+    ('GET', '/v1/billing/meters', api_list_all),
+):
+    app.router.add_route(method, url, func(BillingMeter, url))
+
+# Billing meter events: /v1/billing/meter_events
+app.router.add_route(
+    'POST', '/v1/billing/meter_events',
+    api_create(BillingMeterEvent, '/v1/billing/meter_events')
+)
+
 
 def localstripe_js(request):
     path = os.path.dirname(os.path.realpath(__file__)) + '/localstripe-v3.js'
@@ -942,10 +959,32 @@ def setup_static_routes():
 setup_static_routes()
 
 
+async def on_startup(app_instance):
+    """Called when the app starts - initialize background tasks."""
+    from .background_tasks import scheduler, register_default_tasks
+    register_default_tasks()
+    await scheduler.start()
+
+
+async def on_cleanup(app_instance):
+    """Called when the app shuts down - cleanup background tasks."""
+    from .background_tasks import scheduler
+    await scheduler.stop()
+
+
+# Register startup and cleanup handlers
+app.on_startup.append(on_startup)
+app.on_cleanup.append(on_cleanup)
+
+
 def start():
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=8420)
     parser.add_argument('--from-scratch', action='store_true')
+    parser.add_argument(
+        '--no-background-tasks', action='store_true',
+        help='Disable background task scheduler'
+    )
     args = parser.parse_args()
 
     if not args.from_scratch:
@@ -953,6 +992,11 @@ def start():
 
     # Ensure at least one account exists
     Account.ensure_default_account()
+
+    # Optionally disable background tasks
+    if args.no_background_tasks:
+        app.on_startup.clear()
+        app.on_cleanup.clear()
 
     # Listen on both IPv4 and IPv6
     sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)

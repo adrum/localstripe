@@ -4794,3 +4794,333 @@ class Token(StripeObject):
 
         self.type = 'card'
         self.card = card_obj
+
+
+class BillingMeter(StripeObject):
+    object = 'billing.meter'
+    _id_prefix = 'mtr_'
+
+    def __init__(
+        self,
+        display_name=None,
+        event_name=None,
+        default_aggregation=None,
+        customer_mapping=None,
+        value_settings=None,
+        event_time_window=None,
+        metadata=None,
+        **kwargs,
+    ):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        try:
+            assert _type(display_name) is str and display_name
+            assert _type(event_name) is str and event_name
+
+            if default_aggregation is not None:
+                assert _type(default_aggregation) is dict
+                assert 'formula' in default_aggregation
+                assert default_aggregation['formula'] in ('sum', 'count')
+            else:
+                default_aggregation = {'formula': 'sum'}
+
+            if customer_mapping is not None:
+                assert _type(customer_mapping) is dict
+                assert 'type' in customer_mapping
+                assert customer_mapping['type'] in ('by_id',)
+                assert 'event_payload_key' in customer_mapping
+            else:
+                customer_mapping = {
+                    'type': 'by_id',
+                    'event_payload_key': 'stripe_customer_id'
+                }
+
+            if value_settings is not None:
+                assert _type(value_settings) is dict
+                assert 'event_payload_key' in value_settings
+            else:
+                value_settings = {'event_payload_key': 'value'}
+
+            if event_time_window is not None:
+                assert event_time_window in ('day', 'hour')
+
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        # All exceptions must be raised before this point.
+        super().__init__()
+
+        self.display_name = display_name
+        self.event_name = event_name
+        self.default_aggregation = default_aggregation
+        self.customer_mapping = customer_mapping
+        self.value_settings = value_settings
+        self.event_time_window = event_time_window
+        self.status = 'active'
+        self.status_transitions = {
+            'deactivated_at': None,
+        }
+        self.metadata = metadata or {}
+
+        schedule_webhook(Event('billing.meter.created', self))
+
+    @classmethod
+    def _api_deactivate(cls, id, **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        obj = cls._api_retrieve(id)
+        if obj.status == 'inactive':
+            raise UserError(400, 'Meter is already inactive')
+
+        obj.status = 'inactive'
+        obj.status_transitions['deactivated_at'] = int(time.time())
+
+        schedule_webhook(Event('billing.meter.updated', obj))
+        return obj
+
+    @classmethod
+    def _api_reactivate(cls, id, **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        obj = cls._api_retrieve(id)
+        if obj.status == 'active':
+            raise UserError(400, 'Meter is already active')
+
+        obj.status = 'active'
+        obj.status_transitions['deactivated_at'] = None
+
+        schedule_webhook(Event('billing.meter.updated', obj))
+        return obj
+
+    @classmethod
+    def _api_list_all(cls, url, limit=None, starting_after=None, status=None,
+                      **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        try:
+            if status is not None:
+                assert status in ('active', 'inactive')
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        current_account = get_current_account_id()
+
+        li = List(url, limit=limit, starting_after=starting_after)
+        li._list = [
+            value
+            for key, value in store.items()
+            if key.startswith(cls.object + ':')
+            and _object_belongs_to_account(value, current_account)
+        ]
+
+        if status is not None:
+            li._list = [obj for obj in li._list if obj.status == status]
+
+        return li
+
+    @classmethod
+    def _api_event_summaries(cls, id, customer=None, start_time=None,
+                             end_time=None, value_grouping_window=None,
+                             limit=None, starting_after=None, **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        start_time = try_convert_to_int(start_time)
+        end_time = try_convert_to_int(end_time)
+
+        try:
+            assert _type(customer) is str and customer.startswith('cus_')
+            assert _type(start_time) is int
+            assert _type(end_time) is int
+            if value_grouping_window is not None:
+                assert value_grouping_window in ('day', 'hour')
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        # Retrieve the meter to verify it exists
+        meter = cls._api_retrieve(id)
+        # Verify customer exists
+        Customer._api_retrieve(customer)
+
+        # Get meter events for this customer and time range
+        current_account = get_current_account_id()
+        events = [
+            value
+            for key, value in store.items()
+            if key.startswith(BillingMeterEvent.object + ':')
+            and _object_belongs_to_account(value, current_account)
+            and value.meter == id
+            and value._customer == customer
+            and value.timestamp >= start_time
+            and value.timestamp < end_time
+        ]
+
+        # Group by time window (default is the whole period)
+        window = value_grouping_window or 'hour'
+        summaries = []
+
+        if not events:
+            # Return an empty summary for the period
+            summary = BillingMeterEventSummary(
+                meter=id,
+                customer=customer,
+                start_time=start_time,
+                end_time=end_time,
+                aggregated_value=0.0,
+            )
+            summaries.append(summary)
+        else:
+            # Group events by window and aggregate
+            from collections import defaultdict
+            grouped = defaultdict(list)
+
+            for event in events:
+                if window == 'hour':
+                    # Group by hour
+                    bucket = (event.timestamp // 3600) * 3600
+                elif window == 'day':
+                    # Group by day
+                    bucket = (event.timestamp // 86400) * 86400
+                else:
+                    bucket = start_time
+                grouped[bucket].append(event)
+
+            for bucket_start, bucket_events in sorted(grouped.items()):
+                if window == 'hour':
+                    bucket_end = bucket_start + 3600
+                elif window == 'day':
+                    bucket_end = bucket_start + 86400
+                else:
+                    bucket_end = end_time
+
+                # Aggregate based on meter formula
+                if meter.default_aggregation['formula'] == 'sum':
+                    total = sum(e._value for e in bucket_events)
+                else:  # count
+                    total = len(bucket_events)
+
+                summary = BillingMeterEventSummary(
+                    meter=id,
+                    customer=customer,
+                    start_time=bucket_start,
+                    end_time=bucket_end,
+                    aggregated_value=float(total),
+                )
+                summaries.append(summary)
+
+        # Return as a list
+        url = f'/v1/billing/meters/{id}/event_summaries'
+        li = List(url, limit=limit, starting_after=starting_after)
+        li._list = summaries
+        return li
+
+
+extra_apis.extend((
+    ('POST', '/v1/billing/meters/{id}/deactivate', BillingMeter._api_deactivate),
+    ('POST', '/v1/billing/meters/{id}/reactivate', BillingMeter._api_reactivate),
+    ('GET', '/v1/billing/meters/{id}/event_summaries',
+     BillingMeter._api_event_summaries),
+))
+
+
+class BillingMeterEvent(StripeObject):
+    object = 'billing.meter_event'
+    _id_prefix = 'mtrevt_'
+
+    def __init__(
+        self,
+        event_name=None,
+        payload=None,
+        timestamp=None,
+        identifier=None,
+        **kwargs,
+    ):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        timestamp = try_convert_to_int(timestamp)
+        if timestamp is None:
+            timestamp = int(time.time())
+
+        try:
+            assert _type(event_name) is str and event_name
+            assert _type(payload) is dict
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        # Find the meter by event_name
+        current_account = get_current_account_id()
+        meter = None
+        for key, value in store.items():
+            if key.startswith(BillingMeter.object + ':'):
+                if _object_belongs_to_account(value, current_account):
+                    if value.event_name == event_name:
+                        meter = value
+                        break
+
+        if meter is None:
+            raise UserError(400, f'No meter found for event_name: {event_name}')
+
+        if meter.status != 'active':
+            raise UserError(400, 'Meter is not active')
+
+        # Extract customer from payload
+        customer_key = meter.customer_mapping.get(
+            'event_payload_key', 'stripe_customer_id')
+        customer = payload.get(customer_key)
+        if not customer:
+            raise UserError(400, f'Missing {customer_key} in payload')
+
+        # Verify customer exists
+        Customer._api_retrieve(customer)
+
+        # Extract value from payload
+        value_key = meter.value_settings.get('event_payload_key', 'value')
+        value = payload.get(value_key, 1)
+        value = try_convert_to_float(value) or try_convert_to_int(value) or 1
+
+        # All exceptions must be raised before this point.
+        super().__init__()
+
+        self.event_name = event_name
+        self.payload = payload
+        self.timestamp = timestamp
+        self.identifier = identifier or self.id
+        self.meter = meter.id
+        self._customer = customer
+        self._value = value
+
+    @classmethod
+    def _api_list_all(cls, url, **kwargs):
+        # Meter events cannot be listed via API
+        raise UserError(405, 'Method Not Allowed')
+
+
+class BillingMeterEventSummary(StripeObject):
+    object = 'billing.meter_event_summary'
+    _id_prefix = 'mtrevtsum_'
+
+    def __init__(
+        self,
+        meter=None,
+        customer=None,
+        start_time=None,
+        end_time=None,
+        aggregated_value=None,
+        **kwargs,
+    ):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        # All exceptions must be raised before this point.
+        super().__init__()
+
+        self.meter = meter
+        self.customer = customer
+        self.start_time = start_time
+        self.end_time = end_time
+        self.aggregated_value = aggregated_value
