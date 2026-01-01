@@ -28,11 +28,13 @@ def get_backend() -> StorageBackend:
         - 'pickle' (default): File-based pickle storage
         - 'sqlite': SQLite database storage
         - 'postgres': PostgreSQL database storage
+        - 'mysql': MySQL database storage
 
     Each backend type has its own configuration environment variables:
         - pickle: LOCALSTRIPE_DISK_PATH (default: /tmp/localstripe.pickle)
         - sqlite: LOCALSTRIPE_SQLITE_PATH (default: /tmp/localstripe.db)
         - postgres: LOCALSTRIPE_POSTGRES_URL (required for postgres backend)
+        - mysql: LOCALSTRIPE_MYSQL_URL (required for mysql backend)
     """
     backend_type = os.environ.get('LOCALSTRIPE_BACKEND', 'pickle').lower()
 
@@ -66,10 +68,28 @@ def get_backend() -> StorageBackend:
             )
         return PostgresBackend(postgres_url)
 
+    elif backend_type == 'mysql':
+        try:
+            from .mysql_backend import MySQLBackend
+        except ImportError:
+            raise ImportError(
+                "MySQL backend requires mysql-connector-python. "
+                "Install it with: pip install localstripe[mysql]"
+            )
+
+        mysql_url = os.environ.get('LOCALSTRIPE_MYSQL_URL')
+        if not mysql_url:
+            raise ValueError(
+                "LOCALSTRIPE_MYSQL_URL environment variable is required "
+                "for MySQL backend. Example: "
+                "mysql://user:password@localhost:3306/localstripe"
+            )
+        return MySQLBackend(mysql_url)
+
     else:
         raise ValueError(
             f"Unknown backend type: {backend_type}. "
-            f"Supported backends: pickle, sqlite, postgres"
+            f"Supported backends: pickle, sqlite, postgres, mysql"
         )
 
 

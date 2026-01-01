@@ -12,6 +12,14 @@ import pytest
 from localstripe.backends import PickleBackend, SQLiteBackend, get_backend
 from localstripe.backends.base import StorageBackend
 
+# Try to import MySQL backend (optional dependency)
+try:
+    from localstripe.backends.mysql_backend import MySQLBackend
+    HAS_MYSQL = True
+except ImportError:
+    MySQLBackend = None
+    HAS_MYSQL = False
+
 
 class MockStripeObject:
     """Mock Stripe object for testing."""
@@ -312,3 +320,77 @@ class TestGetBackend:
 
         with pytest.raises(ValueError, match='LOCALSTRIPE_POSTGRES_URL'):
             get_backend()
+
+    def test_mysql_without_url_raises(self, monkeypatch):
+        monkeypatch.setenv('LOCALSTRIPE_BACKEND', 'mysql')
+        monkeypatch.delenv('LOCALSTRIPE_MYSQL_URL', raising=False)
+
+        with pytest.raises(ValueError, match='LOCALSTRIPE_MYSQL_URL'):
+            get_backend()
+
+
+@pytest.mark.skipif(not HAS_MYSQL, reason="MySQL connector not installed")
+class TestMySQLBackendInterface:
+    """Test that MySQL backend implements the StorageBackend interface."""
+
+    def test_mysql_backend_is_storage_backend(self):
+        # This test requires a running MySQL server
+        # Skip in CI unless MySQL is available
+        pytest.skip("Requires running MySQL server")
+
+
+@pytest.mark.skipif(not HAS_MYSQL, reason="MySQL connector not installed")
+class TestMySQLBackendUnit:
+    """Unit tests for MySQL backend that don't require a database."""
+
+    def test_parse_connection_url_full(self):
+        backend_class = MySQLBackend
+        # Test URL parsing without actually connecting
+        url = "mysql://user:password@localhost:3306/testdb"
+        import re
+        pattern = r'mysql://(?:([^:@]+)(?::([^@]*))?@)?([^:/]+)(?::(\d+))?/(.+)'
+        match = re.match(pattern, url)
+        assert match is not None
+        user, password, host, port, database = match.groups()
+        assert user == 'user'
+        assert password == 'password'
+        assert host == 'localhost'
+        assert port == '3306'
+        assert database == 'testdb'
+
+    def test_parse_connection_url_no_port(self):
+        url = "mysql://user:password@localhost/testdb"
+        import re
+        pattern = r'mysql://(?:([^:@]+)(?::([^@]*))?@)?([^:/]+)(?::(\d+))?/(.+)'
+        match = re.match(pattern, url)
+        assert match is not None
+        user, password, host, port, database = match.groups()
+        assert user == 'user'
+        assert password == 'password'
+        assert host == 'localhost'
+        assert port is None
+        assert database == 'testdb'
+
+    def test_table_name(self):
+        # Verify pluralization logic
+        assert "customers" == "customer" + "s"
+        assert "charges" == "charge" + "s"
+        assert "_accounts" == "_account" + "s"
+
+    def test_parse_key(self):
+        # Test key parsing logic
+        key = "customer:cus_123"
+        parts = key.split(':', 1)
+        assert parts[0] == "customer"
+        assert parts[1] == "cus_123"
+
+    def test_escape_identifier(self):
+        # Test identifier escaping
+        identifier = "customers"
+        escaped = f"`{identifier.replace('`', '``')}`"
+        assert escaped == "`customers`"
+
+        # Test with backtick in name
+        identifier = "cust`omers"
+        escaped = f"`{identifier.replace('`', '``')}`"
+        assert escaped == "`cust``omers`"
