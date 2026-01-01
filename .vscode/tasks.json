@@ -1,0 +1,28 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "python (venv)",
+            "type": "shell",
+            "command": "source venv/bin/activate && python -m localstripe",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "dev",
+            "type": "shell",
+            "command": "pnpm dev",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/ui"
+            }
+        }
+    ]
+}
