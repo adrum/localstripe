@@ -344,7 +344,6 @@ class TestMySQLBackendUnit:
     """Unit tests for MySQL backend that don't require a database."""
 
     def test_parse_connection_url_full(self):
-        backend_class = MySQLBackend
         # Test URL parsing without actually connecting
         url = "mysql://user:password@localhost:3306/testdb"
         import re
