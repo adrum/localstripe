@@ -1,6 +1,9 @@
 localstripe
 ===========
 
+This project is a derivative of https://github.com/adrienverge/localstripe
+
+
 *A fake but stateful Stripe server that you can run locally, for testing
 purposes.*
 
