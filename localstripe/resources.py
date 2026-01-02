@@ -5124,3 +5124,603 @@ class BillingMeterEventSummary(StripeObject):
         self.start_time = start_time
         self.end_time = end_time
         self.aggregated_value = aggregated_value
+
+
+class CheckoutSessionLineItem(StripeObject):
+    object = 'item'
+    _id_prefix = 'li_'
+
+    def __init__(
+        self,
+        price=None,
+        price_data=None,
+        quantity=1,
+        **kwargs,
+    ):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        quantity = try_convert_to_int(quantity)
+        try:
+            assert (price is not None) != (price_data is not None), \
+                'Exactly one of price or price_data must be provided'
+            assert _type(quantity) is int and quantity > 0
+        except AssertionError as e:
+            raise UserError(400, str(e) if str(e) else 'Bad request')
+
+        # Handle price_data - create an inline Price
+        if price_data is not None:
+            try:
+                assert _type(price_data) is dict
+                assert 'currency' in price_data
+                assert 'unit_amount' in price_data or 'unit_amount_decimal' \
+                    in price_data
+
+                # Handle product_data or product reference
+                product_id = None
+                if 'product_data' in price_data:
+                    pd = price_data['product_data']
+                    assert _type(pd) is dict
+                    assert 'name' in pd
+                    # Create an inline product
+                    product = Product(
+                        name=pd.get('name'),
+                        description=pd.get('description'),
+                        metadata=pd.get('metadata'),
+                    )
+                    product_id = product.id
+                elif 'product' in price_data:
+                    product_id = price_data['product']
+                    Product._api_retrieve(product_id)
+                else:
+                    raise UserError(
+                        400,
+                        'price_data must contain product or product_data'
+                    )
+
+                # Create the price object (not stored, inline)
+                self._price_obj = Price(
+                    currency=price_data['currency'],
+                    unit_amount=price_data.get('unit_amount'),
+                    unit_amount_decimal=price_data.get('unit_amount_decimal'),
+                    product=product_id,
+                    recurring=price_data.get('recurring'),
+                    tax_behavior=price_data.get('tax_behavior'),
+                )
+                price = self._price_obj.id
+            except AssertionError:
+                raise UserError(400, 'Bad request')
+        else:
+            # Retrieve the existing price
+            self._price_obj = Price._api_retrieve(price)
+
+        # All exceptions must be raised before this point.
+        super().__init__()
+
+        self.price = self._price_obj
+        self.quantity = quantity
+        self.description = Product._api_retrieve(self._price_obj.product).name
+
+    @property
+    def amount_subtotal(self):
+        unit_amount = self._price_obj.unit_amount or 0
+        return unit_amount * self.quantity
+
+    @property
+    def amount_total(self):
+        return self.amount_subtotal
+
+    @property
+    def currency(self):
+        return self._price_obj.currency
+
+    @classmethod
+    def _api_create(cls, **data):
+        raise UserError(405, 'Method Not Allowed')
+
+    @classmethod
+    def _api_update(cls, id, **data):
+        raise UserError(405, 'Method Not Allowed')
+
+    @classmethod
+    def _api_delete(cls, id):
+        raise UserError(405, 'Method Not Allowed')
+
+
+class CheckoutSession(StripeObject):
+    object = 'checkout.session'
+    _id_prefix = 'cs_test_'
+
+    def __init__(
+        self,
+        mode=None,
+        success_url=None,
+        cancel_url=None,
+        line_items=None,
+        customer=None,
+        customer_email=None,
+        customer_creation=None,
+        client_reference_id=None,
+        currency=None,
+        metadata=None,
+        payment_method_types=None,
+        payment_intent_data=None,
+        subscription_data=None,
+        setup_intent_data=None,
+        expires_at=None,
+        ui_mode=None,
+        return_url=None,
+        automatic_tax=None,
+        billing_address_collection=None,
+        shipping_address_collection=None,
+        shipping_options=None,
+        phone_number_collection=None,
+        consent_collection=None,
+        custom_text=None,
+        custom_fields=None,
+        invoice_creation=None,
+        payment_method_options=None,
+        submit_type=None,
+        locale=None,
+        allow_promotion_codes=None,
+        discounts=None,
+        tax_id_collection=None,
+        after_expiration=None,
+        **kwargs,
+    ):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        expires_at = try_convert_to_int(expires_at)
+        try:
+            assert mode in ('payment', 'subscription', 'setup')
+
+            # UI mode handling
+            if ui_mode is None:
+                ui_mode = 'hosted'
+            assert ui_mode in ('hosted', 'embedded', 'custom')
+
+            # URL validation based on ui_mode
+            if ui_mode == 'hosted':
+                if mode != 'setup' or success_url is not None:
+                    assert success_url is not None, \
+                        'success_url is required for hosted mode'
+                    assert _type(success_url) is str
+            else:
+                # embedded/custom mode
+                if return_url is not None:
+                    assert _type(return_url) is str
+
+            if cancel_url is not None:
+                assert _type(cancel_url) is str
+
+            # Line items validation
+            if mode in ('payment', 'subscription'):
+                assert line_items is not None and _type(line_items) is list
+                assert len(line_items) > 0
+            elif line_items is not None:
+                assert _type(line_items) is list
+
+            # Customer validation
+            if customer is not None:
+                assert _type(customer) is str and customer.startswith('cus_')
+            if customer_email is not None:
+                assert _type(customer_email) is str
+            if customer_creation is not None:
+                assert customer_creation in ('always', 'if_required')
+            if client_reference_id is not None:
+                assert _type(client_reference_id) is str
+
+            # Currency validation
+            if currency is not None:
+                assert _type(currency) is str
+
+            # Expires validation
+            if expires_at is not None:
+                assert _type(expires_at) is int
+                now = int(time.time())
+                min_expires = now + 30 * 60  # 30 minutes
+                max_expires = now + 24 * 60 * 60  # 24 hours
+                assert min_expires <= expires_at <= max_expires, \
+                    'expires_at must be between 30 minutes and 24 hours'
+
+            if payment_method_types is not None:
+                assert _type(payment_method_types) is list
+
+        except AssertionError as e:
+            raise UserError(400, str(e) if str(e) else 'Bad request')
+
+        # Verify customer exists if provided
+        if customer is not None:
+            Customer._api_retrieve(customer)
+
+        # All exceptions must be raised before this point.
+        super().__init__()
+
+        self.mode = mode
+        self.success_url = success_url
+        self.cancel_url = cancel_url
+        self.client_reference_id = client_reference_id
+        self.customer = customer
+        self.customer_email = customer_email
+        self.customer_creation = customer_creation or 'if_required'
+        self.metadata = metadata or {}
+        self.payment_method_types = payment_method_types or ['card']
+        self.ui_mode = ui_mode
+        self.return_url = return_url
+        self.locale = locale
+        self.submit_type = submit_type
+        self.billing_address_collection = billing_address_collection
+        self.shipping_address_collection = shipping_address_collection
+        self.phone_number_collection = phone_number_collection
+        self.consent_collection = consent_collection
+        self.custom_text = custom_text
+        self.custom_fields = custom_fields
+        self.allow_promotion_codes = allow_promotion_codes
+        self.tax_id_collection = tax_id_collection
+
+        # Internal state
+        self._status = 'open'
+        self._payment_status = 'unpaid'
+
+        # Set expiration
+        if expires_at is not None:
+            self.expires_at = expires_at
+        else:
+            self.expires_at = int(time.time()) + 24 * 60 * 60  # 24 hours
+
+        # Process line items
+        self.line_items = List(
+            '/v1/checkout/sessions/' + self.id + '/line_items'
+        )
+        if line_items:
+            for item_data in line_items:
+                li = CheckoutSessionLineItem(**item_data)
+                self.line_items._list.append(li)
+
+        # Calculate totals
+        self._calculate_totals()
+
+        # Determine currency from line items if not provided
+        if currency is not None:
+            self.currency = currency
+        elif self.line_items._list:
+            self.currency = self.line_items._list[0].currency
+        else:
+            self.currency = None
+
+        # Create associated payment objects based on mode
+        self.payment_intent = None
+        self.subscription = None
+        self.setup_intent = None
+
+        # Generate checkout URL
+        self._generate_url()
+
+        # Store payment/subscription/setup intent data for later
+        self._payment_intent_data = payment_intent_data or {}
+        self._subscription_data = subscription_data or {}
+        self._setup_intent_data = setup_intent_data or {}
+        self._invoice_creation = invoice_creation
+        self._automatic_tax = automatic_tax
+        self._shipping_options = shipping_options
+        self._discounts = discounts
+
+        schedule_webhook(Event('checkout.session.created', self))
+
+    def _calculate_totals(self):
+        self.amount_subtotal = sum(
+            li.amount_subtotal for li in self.line_items._list
+        )
+        self.amount_total = sum(
+            li.amount_total for li in self.line_items._list
+        )
+
+    def _generate_url(self):
+        if self.ui_mode == 'hosted':
+            # Generate a mock checkout URL
+            self.url = f'https://checkout.stripe.com/c/pay/{self.id}'
+        else:
+            self.url = None
+
+    @property
+    def status(self):
+        if int(time.time()) > self.expires_at and self._status == 'open':
+            return 'expired'
+        return self._status
+
+    @property
+    def payment_status(self):
+        if self.mode == 'setup':
+            if self._status == 'complete':
+                return 'no_payment_required'
+            return 'no_payment_required'
+
+        if self._status == 'complete':
+            return 'paid'
+        return self._payment_status
+
+    @property
+    def customer_details(self):
+        if self.customer:
+            cus = Customer._api_retrieve(self.customer)
+            return {
+                'email': cus.email,
+                'name': cus.name,
+                'phone': cus.phone,
+                'address': cus.address,
+                'tax_exempt': 'none',
+                'tax_ids': [],
+            }
+        elif self.customer_email:
+            return {
+                'email': self.customer_email,
+                'name': None,
+                'phone': None,
+                'address': None,
+                'tax_exempt': 'none',
+                'tax_ids': [],
+            }
+        return None
+
+    @property
+    def total_details(self):
+        return {
+            'amount_discount': 0,
+            'amount_shipping': 0,
+            'amount_tax': 0,
+        }
+
+    def _complete_session(self, payment_method_id=None):
+        """Complete the checkout session after successful payment."""
+        if self._status != 'open':
+            raise UserError(400, 'Session is not open')
+
+        # Create or get customer
+        customer_id = self.customer
+        if customer_id is None and self.customer_creation == 'always':
+            cus = Customer(email=self.customer_email)
+            customer_id = cus.id
+            self.customer = customer_id
+
+        # Handle based on mode
+        if self.mode == 'payment':
+            self._complete_payment_mode(customer_id, payment_method_id)
+        elif self.mode == 'subscription':
+            self._complete_subscription_mode(customer_id, payment_method_id)
+        elif self.mode == 'setup':
+            self._complete_setup_mode(customer_id, payment_method_id)
+
+        self._status = 'complete'
+        self._payment_status = 'paid' if self.mode != 'setup' else \
+            'no_payment_required'
+
+        schedule_webhook(Event('checkout.session.completed', self))
+
+    def _complete_payment_mode(self, customer_id, payment_method_id):
+        """Handle payment mode completion."""
+        # Create a PaymentIntent
+        pi_data = {
+            'amount': self.amount_total,
+            'currency': self.currency,
+            'metadata': self._payment_intent_data.get('metadata', {}),
+        }
+        if customer_id:
+            pi_data['customer'] = customer_id
+        if payment_method_id:
+            pi_data['payment_method'] = payment_method_id
+
+        pi = PaymentIntent(**pi_data)
+        self.payment_intent = pi.id
+
+        # Auto-confirm if payment method provided
+        if payment_method_id:
+            pi._confirm(on_failure_now=lambda: None)
+
+    def _complete_subscription_mode(self, customer_id, payment_method_id):
+        """Handle subscription mode completion."""
+        if not customer_id:
+            # Must create customer for subscription
+            cus = Customer(email=self.customer_email)
+            customer_id = cus.id
+            self.customer = customer_id
+
+        # Attach payment method to customer if provided
+        if payment_method_id:
+            pm = PaymentMethod._api_retrieve(payment_method_id)
+            if pm.customer != customer_id:
+                PaymentMethod._api_attach(payment_method_id, customer=customer_id)
+            # Set as default payment method
+            cus = Customer._api_retrieve(customer_id)
+            cus.invoice_settings['default_payment_method'] = payment_method_id
+
+        # Create subscription items from line items
+        sub_items = []
+        for li in self.line_items._list:
+            if li._price_obj.type == 'recurring':
+                # Get or create a plan from the price
+                plan_id = self._get_or_create_plan_from_price(li._price_obj)
+                sub_items.append({
+                    'plan': plan_id,
+                    'quantity': li.quantity,
+                })
+
+        if sub_items:
+            sub_data = {
+                'customer': customer_id,
+                'items': sub_items,
+                'metadata': self._subscription_data.get('metadata', {}),
+            }
+            if 'trial_period_days' in self._subscription_data:
+                sub_data['trial_period_days'] = \
+                    self._subscription_data['trial_period_days']
+
+            sub = Subscription(**sub_data)
+            self.subscription = sub.id
+
+    def _complete_setup_mode(self, customer_id, payment_method_id):
+        """Handle setup mode completion."""
+        if not customer_id:
+            cus = Customer(email=self.customer_email)
+            customer_id = cus.id
+            self.customer = customer_id
+
+        # Create SetupIntent
+        si_data = {
+            'customer': customer_id,
+            'metadata': self._setup_intent_data.get('metadata', {}),
+        }
+
+        si = SetupIntent(**si_data)
+        self.setup_intent = si.id
+
+        # Attach payment method and confirm
+        if payment_method_id:
+            PaymentMethod._api_attach(payment_method_id, customer=customer_id)
+            si.payment_method = payment_method_id
+            si.status = 'succeeded'
+
+    def _get_or_create_plan_from_price(self, price):
+        """Get or create a Plan from a Price for subscription mode."""
+        if price.recurring is None:
+            raise UserError(400, 'Price must be recurring for subscription mode')
+
+        # Look for existing plan with same parameters
+        for key, value in store.items():
+            if key.startswith('plan:') and isinstance(value, Plan):
+                if (value.amount == price.unit_amount and
+                        value.currency == price.currency and
+                        value.interval == price.recurring['interval'] and
+                        value.interval_count == price.recurring.get(
+                            'interval_count', 1
+                        ) and
+                        value.product == price.product):
+                    return value.id
+
+        # Create a new plan
+        plan = Plan(
+            amount=price.unit_amount,
+            currency=price.currency,
+            interval=price.recurring['interval'],
+            interval_count=price.recurring.get('interval_count', 1),
+            product=price.product,
+        )
+        return plan.id
+
+    @classmethod
+    def _api_retrieve(cls, id):
+        obj = store.get(cls.object + ':' + id)
+        if obj is None:
+            raise UserError(404, 'Not Found')
+        return obj
+
+    @classmethod
+    def _api_list_all(
+        cls, url=None, customer=None, payment_intent=None, subscription=None,
+        status=None, limit=None, starting_after=None, **kwargs
+    ):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        try:
+            if customer is not None:
+                assert _type(customer) is str and customer.startswith('cus_')
+            if payment_intent is not None:
+                assert _type(payment_intent) is str and \
+                    payment_intent.startswith('pi_')
+            if subscription is not None:
+                assert _type(subscription) is str and \
+                    subscription.startswith('sub_')
+            if status is not None:
+                assert status in ('open', 'complete', 'expired')
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        if url is None:
+            url = '/v1/checkout/sessions'
+
+        li = List(url, limit=limit, starting_after=starting_after)
+        li._list = [
+            value
+            for key, value in store.items()
+            if key.startswith(cls.object + ':')
+        ]
+
+        # Apply filters
+        if customer is not None:
+            li._list = [s for s in li._list if s.customer == customer]
+        if payment_intent is not None:
+            li._list = [
+                s for s in li._list if s.payment_intent == payment_intent
+            ]
+        if subscription is not None:
+            li._list = [s for s in li._list if s.subscription == subscription]
+        if status is not None:
+            li._list = [s for s in li._list if s.status == status]
+
+        # Sort by created descending
+        li._list.sort(key=lambda s: s.created, reverse=True)
+
+        return li
+
+    @classmethod
+    def _api_expire(cls, id, **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        try:
+            assert _type(id) is str and id.startswith('cs_')
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        obj = cls._api_retrieve(id)
+
+        if obj._status != 'open':
+            raise UserError(400, 'Cannot expire a session that is not open')
+
+        obj._status = 'expired'
+        obj.url = None
+
+        schedule_webhook(Event('checkout.session.expired', obj))
+
+        return obj
+
+    @classmethod
+    def _api_list_line_items(cls, id, limit=None, starting_after=None,
+                              **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        obj = cls._api_retrieve(id)
+
+        li = List(
+            '/v1/checkout/sessions/' + id + '/line_items',
+            limit=limit,
+            starting_after=starting_after
+        )
+        li._list = obj.line_items._list
+
+        return li
+
+    @classmethod
+    def _api_update(cls, id, **data):
+        raise UserError(405, 'Method Not Allowed')
+
+    @classmethod
+    def _api_delete(cls, id):
+        raise UserError(405, 'Method Not Allowed')
+
+
+extra_apis.extend(
+    (
+        ('POST', '/v1/checkout/sessions', CheckoutSession._api_create),
+        ('GET', '/v1/checkout/sessions/{id}', CheckoutSession._api_retrieve),
+        ('GET', '/v1/checkout/sessions', CheckoutSession._api_list_all),
+        ('POST', '/v1/checkout/sessions/{id}/expire', CheckoutSession._api_expire),
+        (
+            'GET',
+            '/v1/checkout/sessions/{id}/line_items',
+            CheckoutSession._api_list_line_items
+        ),
+    )
+)
