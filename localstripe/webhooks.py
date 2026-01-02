@@ -29,14 +29,15 @@ _webhook_logs = []
 
 
 class Webhook(object):
-    def __init__(self, url, secret, events):
+    def __init__(self, url, secret, events, account_id=None):
         self.url = url
         self.secret = secret
         self.events = events
+        self.account_id = account_id  # Account that owns this webhook
 
 
 class WebhookLog(object):
-    def __init__(self, webhook_id, event, url, attempt=1):
+    def __init__(self, webhook_id, event, url, attempt=1, account_id=None):
         self.id = 'whl_' + str(uuid.uuid4()).replace('-', '')[:24]
         self.webhook_id = webhook_id
         self.event_type = event.type
@@ -50,6 +51,7 @@ class WebhookLog(object):
         self.response_time_ms = None
         self.error_message = None
         self.retry_at = None
+        self.account_id = account_id  # Account that triggered this webhook
 
     def to_dict(self):
         return {
@@ -66,11 +68,12 @@ class WebhookLog(object):
             'response_time_ms': self.response_time_ms,
             'error_message': self.error_message,
             'retry_at': self.retry_at,
+            'account_id': self.account_id,
         }
 
 
-def register_webhook(id, url, secret, events):
-    _webhooks[id] = Webhook(url, secret, events)
+def register_webhook(id, url, secret, events, account_id=None):
+    _webhooks[id] = Webhook(url, secret, events, account_id)
 
 
 async def _send_webhook(event, max_retries=3):
@@ -82,7 +85,16 @@ async def _send_webhook(event, max_retries=3):
 
     logger = logging.getLogger('aiohttp.access')
 
+    # Get the event's account ID
+    event_account_id = getattr(event, '_account_id', None)
+
     for webhook_id, webhook in _webhooks.items():
+        # Filter by account: only trigger webhooks belonging to same account
+        # or webhooks without an account (legacy/global webhooks)
+        if webhook.account_id is not None and event_account_id is not None:
+            if webhook.account_id != event_account_id:
+                continue
+
         if webhook.events is not None and event.type not in webhook.events:
             continue
 
@@ -96,7 +108,9 @@ async def _send_webhook(event, max_retries=3):
 
         # Try delivery with retries
         for attempt in range(1, max_retries + 1):
-            webhook_log = WebhookLog(webhook_id, event, webhook.url, attempt)
+            webhook_log = WebhookLog(
+                webhook_id, event, webhook.url, attempt, event_account_id
+            )
             _webhook_logs.append(webhook_log)
 
             start_time = time.time()
@@ -129,14 +143,14 @@ async def _send_webhook(event, max_retries=3):
 
                         if r.status >= 200 and r.status < 300:
                             logger.info(
-                                'webhook "%s" successfully delivered to %s (attempt %d)'
+                                'webhook "%s" delivered to %s (attempt %d)'
                                 % (event.type, webhook.url, attempt)
                             )
                             break  # Success, don't retry
                         else:
                             webhook_log.error_message = f'HTTP {r.status}'
                             logger.info(
-                                'webhook "%s" failed with response code %d (attempt %d)'
+                                'webhook "%s" failed code %d (attempt %d)'
                                 % (event.type, r.status, attempt)
                             )
 
@@ -190,7 +204,7 @@ async def _send_webhook(event, max_retries=3):
                 webhook_log.status_code = 0
                 webhook_log.error_message = f'Unexpected error: {str(e)}'
                 logger.error(
-                    'webhook "%s" failed with unexpected error: %s (attempt %d)'
+                    'webhook "%s" error: %s (attempt %d)'
                     % (event.type, e, attempt)
                 )
 
@@ -202,3 +216,25 @@ async def _send_webhook(event, max_retries=3):
 
 def schedule_webhook(event):
     asyncio.ensure_future(_send_webhook(event))
+
+
+def delete_webhooks_for_account(account_id):
+    """Delete all webhooks belonging to a specific account"""
+    keys_to_delete = [
+        webhook_id for webhook_id, webhook in _webhooks.items()
+        if webhook.account_id == account_id
+    ]
+    for key in keys_to_delete:
+        del _webhooks[key]
+    return len(keys_to_delete)
+
+
+def delete_webhook_logs_for_account(account_id):
+    """Delete all webhook logs belonging to a specific account"""
+    global _webhook_logs
+    original_count = len(_webhook_logs)
+    _webhook_logs = [
+        log for log in _webhook_logs
+        if log.account_id != account_id
+    ]
+    return original_count - len(_webhook_logs)

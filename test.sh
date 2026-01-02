@@ -1279,3 +1279,187 @@ inv=$(curl -sSfg -u $SK: $HOST/v1/subscriptions \
 total=$(curl -sSfg -u $SK: $HOST/v1/invoices/$inv \
         | grep -oP '"total": \K([0-9]+)' )
 [ "$total" -eq 16383 ]
+
+# =============================================================================
+# Checkout Session Tests
+# =============================================================================
+
+echo "Testing Checkout Sessions..."
+
+# Create a product and price for testing
+prod=$(curl -sSfg -u $SK: $HOST/v1/products \
+            -d name='Test Product' \
+       | grep -oE 'prod_\w+' | head -n 1)
+
+price=$(curl -sSfg -u $SK: $HOST/v1/prices \
+             -d product=$prod \
+             -d unit_amount=2000 \
+             -d currency=usd \
+        | grep -oE 'price_\w+' | head -n 1)
+
+# Test 1: Create a checkout session in payment mode with existing price
+session=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions \
+               -d mode=payment \
+               -d success_url='https://example.com/success' \
+               -d cancel_url='https://example.com/cancel' \
+               -d line_items[0][price]=$price \
+               -d line_items[0][quantity]=2 \
+          | grep -oE 'cs_test_\w+' | head -n 1)
+[ -n "$session" ]
+
+# Retrieve the session
+session_data=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions/$session)
+mode=$(echo "$session_data" | grep -oE '"mode": "payment"')
+[ -n "$mode" ]
+status=$(echo "$session_data" | grep -oE '"status": "open"')
+[ -n "$status" ]
+
+# Get line items
+line_items=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions/$session/line_items)
+quantity=$(echo "$line_items" | grep -oE '"quantity": 2')
+[ -n "$quantity" ]
+
+# Test 2: Create checkout session with price_data (inline price)
+session2=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions \
+                -d mode=payment \
+                -d success_url='https://example.com/success' \
+                -d line_items[0][price_data][currency]=usd \
+                -d line_items[0][price_data][unit_amount]=1500 \
+                -d line_items[0][price_data][product_data][name]='T-shirt' \
+                -d line_items[0][quantity]=1 \
+           | grep -oE 'cs_test_\w+' | head -n 1)
+[ -n "$session2" ]
+
+# Verify amount_total
+amount_total=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions/$session2 \
+               | grep -oE '"amount_total": 1500')
+[ -n "$amount_total" ]
+
+# Test 3: Create checkout session with customer
+cus_checkout=$(curl -sSfg -u $SK: $HOST/v1/customers \
+                    -d email=checkout@example.com \
+               | grep -oE 'cus_\w+' | head -n 1)
+
+session3=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions \
+                -d mode=payment \
+                -d customer=$cus_checkout \
+                -d success_url='https://example.com/success' \
+                -d line_items[0][price]=$price \
+                -d line_items[0][quantity]=1 \
+           | grep -oE 'cs_test_\w+' | head -n 1)
+[ -n "$session3" ]
+
+customer_in_session=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions/$session3 \
+                      | grep -oE "\"customer\": \"$cus_checkout\"")
+[ -n "$customer_in_session" ]
+
+# Test 4: List checkout sessions
+total_count=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions \
+              | grep -oP '^  "total_count": \K([0-9]+)')
+[ "$total_count" -ge 3 ]
+
+# Test 5: Filter by customer
+filtered=$(curl -sSfg -u $SK: "$HOST/v1/checkout/sessions?customer=$cus_checkout" \
+           | grep -oP '^  "total_count": \K([0-9]+)')
+[ "$filtered" -ge 1 ]
+
+# Test 6: Expire a session
+expire_result=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions/$session/expire \
+                     -X POST)
+expired_status=$(echo "$expire_result" | grep -oE '"status": "expired"')
+[ -n "$expired_status" ]
+
+# Verify URL is cleared after expiration
+url_cleared=$(echo "$expire_result" | grep -oE '"url": null')
+[ -n "$url_cleared" ]
+
+# Test 7: Cannot expire an already expired session
+code=$(curl -sg -o /dev/null -w '%{http_code}' -u $SK: \
+       $HOST/v1/checkout/sessions/$session/expire -X POST)
+[ "$code" -eq 400 ]
+
+# Test 8: Create subscription mode checkout session
+recurring_price=$(curl -sSfg -u $SK: $HOST/v1/prices \
+                       -d product=$prod \
+                       -d unit_amount=999 \
+                       -d currency=usd \
+                       -d recurring[interval]=month \
+                  | grep -oE 'price_\w+' | head -n 1)
+
+session_sub=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions \
+                   -d mode=subscription \
+                   -d success_url='https://example.com/success' \
+                   -d line_items[0][price]=$recurring_price \
+                   -d line_items[0][quantity]=1 \
+              | grep -oE 'cs_test_\w+' | head -n 1)
+[ -n "$session_sub" ]
+
+sub_mode=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions/$session_sub \
+           | grep -oE '"mode": "subscription"')
+[ -n "$sub_mode" ]
+
+# Test 9: Create setup mode checkout session
+session_setup=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions \
+                     -d mode=setup \
+                     -d success_url='https://example.com/success' \
+                | grep -oE 'cs_test_\w+' | head -n 1)
+[ -n "$session_setup" ]
+
+setup_mode=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions/$session_setup \
+             | grep -oE '"mode": "setup"')
+[ -n "$setup_mode" ]
+
+# Test 10: Verify checkout URL is generated for hosted mode
+session_url=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions/$session2 \
+              | grep -oE '"url": "https://checkout.stripe.com/c/pay/cs_test_\w+"')
+[ -n "$session_url" ]
+
+# Test 11: Create session with metadata
+session_meta=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions \
+                    -d mode=payment \
+                    -d success_url='https://example.com/success' \
+                    -d line_items[0][price]=$price \
+                    -d line_items[0][quantity]=1 \
+                    -d metadata[order_id]=12345 \
+                    -d metadata[customer_note]='Gift wrap please' \
+               | grep -oE 'cs_test_\w+' | head -n 1)
+[ -n "$session_meta" ]
+
+meta_check=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions/$session_meta \
+             | grep -oE '"order_id": "12345"')
+[ -n "$meta_check" ]
+
+# Test 12: Verify invalid mode fails
+code=$(curl -sg -o /dev/null -w '%{http_code}' -u $SK: \
+       $HOST/v1/checkout/sessions \
+       -d mode=invalid \
+       -d success_url='https://example.com/success' \
+       -d line_items[0][price]=$price \
+       -d line_items[0][quantity]=1)
+[ "$code" -eq 400 ]
+
+# Test 13: Verify missing line_items in payment mode fails
+code=$(curl -sg -o /dev/null -w '%{http_code}' -u $SK: \
+       $HOST/v1/checkout/sessions \
+       -d mode=payment \
+       -d success_url='https://example.com/success')
+[ "$code" -eq 400 ]
+
+# Test 14: Create session with customer_email
+session_email=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions \
+                     -d mode=payment \
+                     -d customer_email='test@example.com' \
+                     -d success_url='https://example.com/success' \
+                     -d line_items[0][price]=$price \
+                     -d line_items[0][quantity]=1 \
+                | grep -oE 'cs_test_\w+' | head -n 1)
+[ -n "$session_email" ]
+
+email_check=$(curl -sSfg -u $SK: $HOST/v1/checkout/sessions/$session_email \
+              | grep -oE '"customer_email": "test@example.com"')
+[ -n "$email_check" ]
+
+# Clean up
+curl -sSfg -u $SK: -X DELETE $HOST/v1/customers/$cus_checkout
+
+echo "Checkout Session tests passed!"

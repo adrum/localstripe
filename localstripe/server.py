@@ -25,7 +25,10 @@ import socket
 from aiohttp import web
 
 from .resources import (
+    Account,
     BalanceTransaction,
+    BillingMeter,
+    BillingMeterEvent,
     Charge,
     Coupon,
     Customer,
@@ -48,9 +51,16 @@ from .resources import (
     Token,
     extra_apis,
     store,
+    set_current_account_id,
+    get_current_account_id,
 )
 from .errors import UserError
-from .webhooks import register_webhook, _webhook_logs
+from .webhooks import (
+    register_webhook,
+    _webhook_logs,
+    delete_webhooks_for_account,
+    delete_webhook_logs_for_account,
+)
 from .api_logs import create_api_log, get_api_logs, clear_api_logs
 
 
@@ -75,7 +85,8 @@ async def add_cors_headers(request, response):
     if origin:
         response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Headers'] = (
-            'Content-Type, Accept, Authorization, X-LocalStripe-UI, X-Requested-With'
+            'Content-Type, Accept, Authorization, X-LocalStripe-UI, '
+            'X-Requested-With'
         )
         response.headers['Access-Control-Allow-Methods'] = (
             'GET, POST, PUT, PATCH, DELETE, OPTIONS'
@@ -184,8 +195,18 @@ def get_api_key(request):
     elif header[0] == 'Bearer':
         api_key = header[1]
 
+    # For backwards compatibility, accept any properly formatted secret key
+    # Account context will only be set if the key belongs to a valid account
     if api_key and api_key.startswith('sk_') and len(api_key) > 5:
         return api_key
+    return None
+
+
+def validate_public_key(key):
+    """Validate a public key format (accepts any pk_test_*)"""
+    # For backwards compatibility, accept any properly formatted public key
+    # Account context will only be set if the key belongs to a valid account
+    return key and key.startswith('pk_') and len(key) > 5
 
 
 @web.middleware
@@ -243,7 +264,7 @@ async def auth_middleware(request, handler):
             if (
                 'key' in data
                 and type(data['key']) is str
-                and data['key'].startswith('pk_')
+                and validate_public_key(data['key'])
             ):
                 is_auth = True
 
@@ -251,6 +272,46 @@ async def auth_middleware(request, handler):
         raise UserError(401, 'Unauthorized')
 
     return await handler(request)
+
+
+@web.middleware
+async def account_context_middleware(request, handler):
+    """Set the account context for the current request based on API key."""
+    # Reset account context at start of each request
+    set_current_account_id(None)
+
+    # Skip for non-API routes
+    if (
+        request.path.startswith('/_config/')
+        or request.path.startswith('/js.stripe.com/')
+        or request.path == '/'
+        or request.path.startswith('/assets/')
+    ):
+        return await handler(request)
+
+    # Try to get account from secret key in Authorization header
+    api_key = get_api_key(request)
+    if api_key:
+        account = Account._api_retrieve_by_key(api_key)
+        if account:
+            set_current_account_id(account.id)
+    else:
+        # Try to get account from public key in POST data
+        if request.method == 'POST':
+            try:
+                data = await get_post_data(request, remove_auth=False)
+                if data and 'key' in data and type(data['key']) is str:
+                    account = Account._api_retrieve_by_key(data['key'])
+                    if account:
+                        set_current_account_id(account.id)
+            except Exception:
+                pass
+
+    try:
+        return await handler(request)
+    finally:
+        # Clear account context after request
+        set_current_account_id(None)
 
 
 @web.middleware
@@ -269,7 +330,7 @@ async def api_logging_middleware(request, handler):
     if request.headers.get('X-LocalStripe-UI') == 'true':
         return await handler(request)
 
-    # Skip logging for internal config endpoints (except api_logs fetching), static files, and UI routes
+    # Skip logging for config endpoints, static files, and UI routes
     if (
         request.path.startswith('/_config/api_logs')
         or request.path.startswith('/_config/webhooks')
@@ -304,12 +365,13 @@ async def api_logging_middleware(request, handler):
         except Exception:
             request_body = None
 
-    # Create log entry
+    # Create log entry with account context
     api_log = create_api_log(
         method=request.method,
         path=request.path,
         query_params=query_params,
         request_body=request_body,
+        account_id=get_current_account_id(),
     )
 
     try:
@@ -341,6 +403,7 @@ app = web.Application(
     middlewares=[
         error_middleware,
         auth_middleware,
+        account_context_middleware,
         api_logging_middleware,
         save_store_middleware,
     ]
@@ -456,6 +519,21 @@ for cls in (
     ):
         app.router.add_route(method, url, func(cls, url))
 
+# Billing meters use a different URL structure: /v1/billing/meters
+for method, url, func in (
+    ('POST', '/v1/billing/meters', api_create),
+    ('GET', '/v1/billing/meters/{id}', api_retrieve),
+    ('POST', '/v1/billing/meters/{id}', api_update),
+    ('GET', '/v1/billing/meters', api_list_all),
+):
+    app.router.add_route(method, url, func(BillingMeter, url))
+
+# Billing meter events: /v1/billing/meter_events
+app.router.add_route(
+    'POST', '/v1/billing/meter_events',
+    api_create(BillingMeterEvent, '/v1/billing/meter_events')
+)
+
 
 def localstripe_js(request):
     path = os.path.dirname(os.path.realpath(__file__)) + '/localstripe-v3.js'
@@ -468,6 +546,14 @@ def localstripe_js(request):
 app.router.add_get('/js.stripe.com/v3/', localstripe_js)
 
 
+def get_account_from_request(request):
+    """Extract account from request's API key (for config endpoints)."""
+    api_key = get_api_key(request)
+    if api_key:
+        return Account._api_retrieve_by_key(api_key)
+    return None
+
+
 async def config_webhook(request):
     id = request.match_info['id']
     data = await get_post_data(request) or {}
@@ -478,26 +564,84 @@ async def config_webhook(request):
         raise UserError(400, 'Bad request')
     if events is not None and type(events) is not list:
         raise UserError(400, 'Bad request')
-    register_webhook(id, url, secret, events)
+
+    # Get account from request
+    account = get_account_from_request(request)
+    account_id = account.id if account else None
+
+    register_webhook(id, url, secret, events, account_id)
     return web.Response()
 
 
 async def flush_store(request):
-    store.clear()
-    return web.Response()
+    """Flush data - either all data or just current account's data.
+
+    Query params:
+    - account_only=true: Only flush data for the current account
+    """
+    data = unflatten_data(request.query)
+    account_only = data.get('account_only', 'false').lower() == 'true'
+
+    if account_only:
+        # Get current account
+        account = get_account_from_request(request)
+        if not account:
+            raise UserError(400, 'No account specified')
+
+        account_id = account.id
+
+        # Delete only objects belonging to this account
+        keys_to_delete = []
+        for key, value in store.items():
+            # Skip account objects themselves
+            if key.startswith('_account:'):
+                continue
+            # Check if object belongs to this account
+            obj_account = getattr(value, '_account_id', None)
+            if obj_account == account_id:
+                keys_to_delete.append(key)
+
+        for key in keys_to_delete:
+            del store[key]
+
+        return json_response({
+            'deleted': len(keys_to_delete),
+            'account_id': account_id,
+        })
+    else:
+        # Flush all data (keep accounts)
+        keys_to_delete = [
+            key for key in store.keys()
+            if not key.startswith('_account:')
+        ]
+        for key in keys_to_delete:
+            del store[key]
+
+        return json_response({
+            'deleted': len(keys_to_delete),
+        })
 
 
 async def get_webhook_logs(request):
-    """Retrieve webhook delivery logs"""
+    """Retrieve webhook delivery logs filtered by account"""
     data = unflatten_data(request.query)
     limit = int(data.get('limit', 50))
     offset = int(data.get('offset', 0))
 
+    account = get_account_from_request(request)
+    account_id = account.id if account else None
+
+    # Filter logs by account
+    filtered_logs = [
+        log for log in _webhook_logs
+        if log.account_id is None or log.account_id == account_id
+    ]
+
     # Sort logs by creation time (newest first)
-    sorted_logs = sorted(_webhook_logs, key=lambda x: x.created, reverse=True)
+    sorted_logs = sorted(filtered_logs, key=lambda x: x.created, reverse=True)
 
     # Apply pagination
-    paginated_logs = sorted_logs[offset : offset + limit]
+    paginated_logs = sorted_logs[offset:offset + limit]
 
     # Convert to dict format
     logs_data = [log.to_dict() for log in paginated_logs]
@@ -513,22 +657,44 @@ async def get_webhook_logs(request):
 
 
 async def get_webhooks_config(request):
-    """Retrieve webhook configurations"""
+    """Retrieve webhook configurations filtered by account"""
     from .webhooks import _webhooks
 
-    return json_response(_webhooks)
+    account = get_account_from_request(request)
+    account_id = account.id if account else None
+
+    # Filter webhooks by account
+    filtered_webhooks = {}
+    for webhook_id, webhook in _webhooks.items():
+        # Show webhooks that belong to this account or have no account (legacy)
+        if webhook.account_id is None or webhook.account_id == account_id:
+            filtered_webhooks[webhook_id] = {
+                'url': webhook.url,
+                'events': webhook.events,
+                'account_id': webhook.account_id,
+            }
+
+    return json_response(filtered_webhooks)
 
 
 async def delete_webhook_config(request):
-    """Delete a webhook configuration"""
+    """Delete a webhook configuration (must belong to current account)"""
     webhook_id = request.match_info['id']
     from .webhooks import _webhooks
 
-    if webhook_id in _webhooks:
-        del _webhooks[webhook_id]
-        return web.Response()
-    else:
+    if webhook_id not in _webhooks:
         raise UserError(404, 'Webhook not found')
+
+    webhook = _webhooks[webhook_id]
+    account = get_account_from_request(request)
+    account_id = account.id if account else None
+
+    # Only allow deleting webhooks belonging to this account
+    if webhook.account_id is not None and webhook.account_id != account_id:
+        raise UserError(404, 'Webhook not found')
+
+    del _webhooks[webhook_id]
+    return web.Response()
 
 
 async def retry_webhook(request):
@@ -558,7 +724,7 @@ async def retry_webhook(request):
 
 
 async def get_api_logs_endpoint(request):
-    """Retrieve API logs with optional filtering"""
+    """Retrieve API logs with optional filtering by account"""
     data = unflatten_data(request.query)
 
     # Extract query parameters
@@ -571,6 +737,10 @@ async def get_api_logs_endpoint(request):
     object_type = data.get('object_type', None)
     object_id = data.get('object_id', None)
 
+    # Get account from request for filtering
+    account = get_account_from_request(request)
+    account_id = account.id if account else None
+
     # Get filtered logs
     logs = get_api_logs(
         limit=limit,
@@ -579,15 +749,135 @@ async def get_api_logs_endpoint(request):
         status_code=status_code,
         object_type=object_type,
         object_id=object_id,
+        account_id=account_id,
     )
 
     return json_response(logs)
 
 
 async def clear_api_logs_endpoint(request):
-    """Clear all API logs"""
-    clear_api_logs()
+    """Clear all API logs, or only for the current account"""
+    data = unflatten_data(request.query)
+    account_only = data.get('account_only', 'false').lower() == 'true'
+
+    if account_only:
+        account = get_account_from_request(request)
+        if account:
+            clear_api_logs(account_id=account.id)
+        # If no account found, clear nothing (safer behavior)
+    else:
+        clear_api_logs()
+
     return web.Response()
+
+
+# Account management endpoints
+async def get_accounts(request):
+    """List all accounts"""
+    accounts = Account._api_list_all()
+    return json_response({
+        'object': 'list',
+        'data': [acc._export() for acc in accounts],
+    })
+
+
+async def create_account(request):
+    """Create a new account"""
+    data = await get_post_data(request) or {}
+    name = data.get('name', 'New Account')
+    account = Account(name=name)
+    return json_response(account._export())
+
+
+async def get_account(request):
+    """Get a specific account"""
+    account_id = request.match_info['id']
+    account = Account._api_retrieve(account_id)
+    return json_response(account._export())
+
+
+async def update_account(request):
+    """Update an account"""
+    account_id = request.match_info['id']
+    data = await get_post_data(request) or {}
+    account = Account._api_update(account_id, **data)
+    return json_response(account._export())
+
+
+async def delete_account(request):
+    """Delete an account and all its associated data (cascade delete)"""
+    account_id = request.match_info['id']
+
+    # Ensure we don't delete the last account
+    accounts = Account._api_list_all()
+    if len(accounts) <= 1:
+        raise UserError(400, 'Cannot delete the last account')
+
+    # Cascade delete all account data
+    deleted_counts = {
+        'objects': 0,
+        'webhooks': 0,
+        'webhook_logs': 0,
+        'api_logs': 0,
+    }
+
+    # Delete all objects in store belonging to this account
+    keys_to_delete = []
+    for key, value in store.items():
+        # Skip account objects themselves (handled separately)
+        if key.startswith('_account:'):
+            continue
+        # Check if object belongs to this account
+        obj_account = getattr(value, '_account_id', None)
+        if obj_account == account_id:
+            keys_to_delete.append(key)
+
+    for key in keys_to_delete:
+        del store[key]
+    deleted_counts['objects'] = len(keys_to_delete)
+
+    # Delete webhooks for this account
+    deleted_counts['webhooks'] = delete_webhooks_for_account(account_id)
+
+    # Delete webhook logs for this account
+    deleted_counts['webhook_logs'] = \
+        delete_webhook_logs_for_account(account_id)
+
+    # Delete API logs for this account
+    clear_api_logs(account_id=account_id)
+
+    # Finally, delete the account itself
+    result = Account._api_delete(account_id)
+    result['deleted_data'] = deleted_counts
+
+    return json_response(result)
+
+
+async def regenerate_account_keys(request):
+    """Regenerate API keys for an account"""
+    import random
+    import string
+
+    account_id = request.match_info['id']
+    account = Account._api_retrieve(account_id)
+
+    # Generate new keys
+    key_suffix = ''.join(
+        random.choice(string.ascii_letters + string.digits)
+        for _ in range(24)
+    )
+    account.public_key = f'pk_test_{key_suffix}'
+
+    key_suffix = ''.join(
+        random.choice(string.ascii_letters + string.digits)
+        for _ in range(24)
+    )
+    account.secret_key = f'sk_test_{key_suffix}'
+
+    # Save to disk
+    store[f'_account:{account_id}'] = account
+
+    return json_response(account._export())
 
 
 # Add all API routes first
@@ -599,6 +889,15 @@ app.router.add_post('/_config/webhook_logs/{log_id}/retry', retry_webhook)
 app.router.add_get('/_config/api_logs', get_api_logs_endpoint)
 app.router.add_delete('/_config/api_logs', clear_api_logs_endpoint)
 app.router.add_delete('/_config/data', flush_store)
+
+# Account management routes
+app.router.add_get('/_config/accounts', get_accounts)
+app.router.add_post('/_config/accounts', create_account)
+app.router.add_get('/_config/accounts/{id}', get_account)
+app.router.add_post('/_config/accounts/{id}', update_account)
+app.router.add_delete('/_config/accounts/{id}', delete_account)
+app.router.add_post(
+    '/_config/accounts/{id}/regenerate-keys', regenerate_account_keys)
 
 
 # Static file serving for UI - must be LAST to avoid conflicts
@@ -661,14 +960,44 @@ def setup_static_routes():
 setup_static_routes()
 
 
+async def on_startup(app_instance):
+    """Called when the app starts - initialize background tasks."""
+    from .background_tasks import scheduler, register_default_tasks
+    register_default_tasks()
+    await scheduler.start()
+
+
+async def on_cleanup(app_instance):
+    """Called when the app shuts down - cleanup background tasks."""
+    from .background_tasks import scheduler
+    await scheduler.stop()
+
+
+# Register startup and cleanup handlers
+app.on_startup.append(on_startup)
+app.on_cleanup.append(on_cleanup)
+
+
 def start():
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=8420)
     parser.add_argument('--from-scratch', action='store_true')
+    parser.add_argument(
+        '--no-background-tasks', action='store_true',
+        help='Disable background task scheduler'
+    )
     args = parser.parse_args()
 
     if not args.from_scratch:
         store.try_load_from_disk()
+
+    # Ensure at least one account exists
+    Account.ensure_default_account()
+
+    # Optionally disable background tasks
+    if args.no_background_tasks:
+        app.on_startup.clear()
+        app.on_cleanup.clear()
 
     # Listen on both IPv4 and IPv6
     sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)

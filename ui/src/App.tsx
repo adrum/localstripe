@@ -1,5 +1,6 @@
 import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { AccountProvider } from '@/contexts/AccountContext';
 import Sidebar from '@/components/layout/Sidebar';
 import Overview from '@/components/dashboard/Overview';
 import Customers from '@/components/dashboard/Customers';
@@ -10,6 +11,7 @@ import Payments from '@/components/dashboard/Payments';
 import Charges from '@/components/dashboard/Charges';
 import Webhooks from '@/components/dashboard/Webhooks';
 import Logs from '@/components/dashboard/Logs';
+import Accounts from '@/components/dashboard/Accounts';
 
 // Page titles and subtitles for each route
 const pageInfo: Record<string, { title: string; subtitle: string }> = {
@@ -57,6 +59,10 @@ const pageInfo: Record<string, { title: string; subtitle: string }> = {
     title: 'API Keys',
     subtitle: 'Manage API keys and authentication'
   },
+  '/accounts': {
+    title: 'Accounts',
+    subtitle: 'Manage accounts and API keys for different projects'
+  },
 };
 
 function AppContent() {
@@ -91,6 +97,7 @@ function AppContent() {
             <Route path="/charges" element={<Charges />} />
             <Route path="/webhooks" element={<Webhooks />} />
             <Route path="/logs" element={<Logs />} />
+            <Route path="/accounts" element={<Accounts />} />
             <Route path="/settings" element={<PlaceholderPage name="Settings" />} />
             <Route path="/api-keys" element={<PlaceholderPage name="API Keys" />} />
           </Routes>
@@ -122,9 +129,11 @@ function PlaceholderPage({ name }: { name: string }) {
 function App() {
   return (
     <ThemeProvider>
-      <Router>
-        <AppContent />
-      </Router>
+      <AccountProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </AccountProvider>
     </ThemeProvider>
   );
 }
