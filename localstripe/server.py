@@ -46,7 +46,12 @@ from .resources import (
     Source,
     Subscription,
     SubscriptionItem,
+    TaxCalculation,
+    TaxCode,
     TaxRate,
+    TaxRegistration,
+    TaxSettings,
+    TaxTransaction,
     Token,
     extra_apis,
     store,
@@ -531,6 +536,111 @@ for method, url, func in (
 app.router.add_route(
     'POST', '/v1/billing/meter_events',
     api_create(BillingMeterEvent, '/v1/billing/meter_events')
+)
+
+# Tax Settings: /v1/tax/settings (singleton)
+async def tax_settings_retrieve(request):
+    data = await get_post_data(request)
+    obj = TaxSettings._api_retrieve(**data)
+    return json_response(obj._export())
+
+
+async def tax_settings_update(request):
+    data = await get_post_data(request)
+    obj = TaxSettings._api_update(**data)
+    return json_response(obj._export())
+
+
+app.router.add_get('/v1/tax/settings', tax_settings_retrieve)
+app.router.add_post('/v1/tax/settings', tax_settings_update)
+
+# Tax Registrations: /v1/tax/registrations
+for method, url, func in (
+    ('POST', '/v1/tax/registrations', api_create),
+    ('GET', '/v1/tax/registrations/{id}', api_retrieve),
+    ('POST', '/v1/tax/registrations/{id}', api_update),
+    ('GET', '/v1/tax/registrations', api_list_all),
+):
+    app.router.add_route(method, url, func(TaxRegistration, url))
+
+# Tax Codes: /v1/tax_codes (read-only)
+async def tax_codes_list(request):
+    result = TaxCode._api_list_all()
+    return json_response(result)
+
+
+async def tax_codes_retrieve(request):
+    tax_code_id = request.match_info['id']
+    result = TaxCode._api_retrieve(tax_code_id)
+    return json_response(result)
+
+
+app.router.add_get('/v1/tax_codes', tax_codes_list)
+app.router.add_get('/v1/tax_codes/{id}', tax_codes_retrieve)
+
+# Tax Calculations: /v1/tax/calculations
+async def tax_calculation_create(request):
+    data = await get_post_data(request)
+    obj = TaxCalculation._api_create(**data)
+    return json_response(obj._export())
+
+
+async def tax_calculation_retrieve(request):
+    calc_id = request.match_info['id']
+    obj = TaxCalculation._api_retrieve(calc_id)
+    return json_response(obj._export())
+
+
+async def tax_calculation_line_items(request):
+    calc_id = request.match_info['id']
+    data = await get_post_data(request)
+    result = TaxCalculation._api_list_line_items(calc_id, **data)
+    return json_response(result)
+
+
+app.router.add_post('/v1/tax/calculations', tax_calculation_create)
+app.router.add_get('/v1/tax/calculations/{id}', tax_calculation_retrieve)
+app.router.add_get(
+    '/v1/tax/calculations/{id}/line_items', tax_calculation_line_items
+)
+
+# Tax Transactions: /v1/tax/transactions
+async def tax_transaction_create_from_calculation(request):
+    data = await get_post_data(request)
+    obj = TaxTransaction._api_create_from_calculation(**data)
+    return json_response(obj._export())
+
+
+async def tax_transaction_create_reversal(request):
+    data = await get_post_data(request)
+    obj = TaxTransaction._api_create_reversal(**data)
+    return json_response(obj._export())
+
+
+async def tax_transaction_retrieve(request):
+    txn_id = request.match_info['id']
+    obj = TaxTransaction._api_retrieve(txn_id)
+    return json_response(obj._export())
+
+
+async def tax_transaction_line_items(request):
+    txn_id = request.match_info['id']
+    data = await get_post_data(request)
+    result = TaxTransaction._api_list_line_items(txn_id, **data)
+    return json_response(result)
+
+
+app.router.add_post(
+    '/v1/tax/transactions/create_from_calculation',
+    tax_transaction_create_from_calculation
+)
+app.router.add_post(
+    '/v1/tax/transactions/create_reversal',
+    tax_transaction_create_reversal
+)
+app.router.add_get('/v1/tax/transactions/{id}', tax_transaction_retrieve)
+app.router.add_get(
+    '/v1/tax/transactions/{id}/line_items', tax_transaction_line_items
 )
 
 

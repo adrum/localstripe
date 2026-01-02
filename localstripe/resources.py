@@ -1538,6 +1538,7 @@ class Invoice(StripeObject):
         upcoming=False,
         tax_percent=None,  # deprecated
         default_tax_rates=None,
+        automatic_tax=None,
         **kwargs,
     ):
         if kwargs:
@@ -1567,6 +1568,12 @@ class Invoice(StripeObject):
                     type(txr) is str and txr.startswith('txr_')
                     for txr in default_tax_rates
                 )
+            if automatic_tax is not None:
+                assert type(automatic_tax) is dict
+                if 'enabled' in automatic_tax:
+                    automatic_tax['enabled'] = try_convert_to_bool(
+                        automatic_tax['enabled']
+                    )
         except AssertionError:
             raise UserError(400, 'Bad request')
 
@@ -1588,6 +1595,7 @@ class Invoice(StripeObject):
         self.subscription = subscription
         self.tax_percent = tax_percent
         self.default_tax_rates = default_tax_rates
+        self.automatic_tax = automatic_tax or {'enabled': False, 'status': None}
         self.date = date
         self.metadata = metadata or {}
         self.payment_intent = None
@@ -3176,6 +3184,7 @@ class Product(StripeObject):
         shippable=True,
         url=None,
         statement_descriptor=None,
+        tax_code=None,
         metadata=None,
         **kwargs,
     ):
@@ -3200,6 +3209,8 @@ class Product(StripeObject):
             if statement_descriptor is not None:
                 assert _type(statement_descriptor) is str
                 assert len(statement_descriptor) <= 22
+            if tax_code is not None:
+                assert _type(tax_code) is str
         except AssertionError:
             raise UserError(400, 'Bad request')
 
@@ -3215,6 +3226,7 @@ class Product(StripeObject):
         self.shippable = shippable
         self.url = url
         self.statement_descriptor = statement_descriptor
+        self.tax_code = tax_code
         self.metadata = metadata or {}
 
         schedule_webhook(Event('product.created', self))
@@ -3255,6 +3267,8 @@ class Product(StripeObject):
                 assert _type(data['active']) is bool
             if 'shippable' in data:
                 assert _type(data['shippable']) is bool
+            if 'tax_code' in data and data['tax_code'] is not None:
+                assert _type(data['tax_code']) is str
         except AssertionError:
             raise UserError(400, 'Bad request')
 
@@ -3852,6 +3866,7 @@ class Subscription(StripeObject):
         items=None,
         trial_end=None,
         default_tax_rates=None,
+        automatic_tax=None,
         trial_from_plan=False,
         backdate_start_date=None,
         plan=None,
@@ -3904,6 +3919,12 @@ class Subscription(StripeObject):
                     type(txr) is str and txr.startswith('txr_')
                     for txr in default_tax_rates
                 )
+            if automatic_tax is not None:
+                assert type(automatic_tax) is dict
+                if 'enabled' in automatic_tax:
+                    automatic_tax['enabled'] = try_convert_to_bool(
+                        automatic_tax['enabled']
+                    )
             if trial_period_days is not None:
                 assert type(trial_period_days) is int
             if backdate_start_date is not None:
@@ -3962,6 +3983,7 @@ class Subscription(StripeObject):
         self.metadata = metadata or {}
         self.tax_percent = tax_percent
         self.default_tax_rates = default_tax_rates
+        self.automatic_tax = automatic_tax or {'enabled': False}
         self.application_fee_percent = None
         self.cancel_at_period_end = False
         self.cancel_at = None
@@ -4765,6 +4787,634 @@ class TaxRate(StripeObject):
             'amount': int(decimal.quantize(Decimal('1.'), ROUND_HALF_UP)),
             'inclusive': self.inclusive,
             'tax_rate': self.id,
+        }
+
+
+class TaxSettings(StripeObject):
+    object = 'tax.settings'
+    _id_prefix = 'txs_'
+
+    # Singleton - only one settings object per account
+    _singleton_key = '_tax_settings:default'
+
+    def __init__(
+        self,
+        defaults=None,
+        head_office=None,
+        livemode=False,
+        status=None,
+        status_details=None,
+        **kwargs,
+    ):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        # All exceptions must be raised before this point.
+        super().__init__()
+
+        self.defaults = defaults or {
+            'tax_behavior': None,
+            'tax_code': None,
+        }
+        self.head_office = head_office
+        self.livemode = livemode
+        self.status = status or 'active'
+        self.status_details = status_details or {'active': {}, 'pending': None}
+
+    @classmethod
+    def _api_retrieve(cls, **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        obj = store.get(cls._singleton_key)
+        if obj is None:
+            # Create default settings
+            obj = cls()
+            store[cls._singleton_key] = obj
+        return obj
+
+    @classmethod
+    def _api_update(cls, defaults=None, head_office=None, **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        obj = cls._api_retrieve()
+
+        if defaults is not None:
+            if _type(defaults) is not dict:
+                raise UserError(400, 'Bad request')
+            if 'tax_behavior' in defaults:
+                if defaults['tax_behavior'] not in (
+                    None, 'exclusive', 'inclusive', 'inferred_by_currency'
+                ):
+                    raise UserError(400, 'Invalid tax_behavior')
+                obj.defaults['tax_behavior'] = defaults['tax_behavior']
+            if 'tax_code' in defaults:
+                obj.defaults['tax_code'] = defaults['tax_code']
+
+        if head_office is not None:
+            if _type(head_office) is not dict:
+                raise UserError(400, 'Bad request')
+            obj.head_office = head_office
+
+        store[cls._singleton_key] = obj
+        return obj
+
+
+class TaxRegistration(StripeObject):
+    object = 'tax.registration'
+    _id_prefix = 'taxreg_'
+
+    def __init__(
+        self,
+        country=None,
+        country_options=None,
+        active_from=None,
+        expires_at=None,
+        status=None,
+        **kwargs,
+    ):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        try:
+            assert _type(country) is str and len(country) == 2
+            if country_options is not None:
+                assert _type(country_options) is dict
+            if active_from is not None:
+                if active_from == 'now':
+                    active_from = int(time.time())
+                else:
+                    active_from = try_convert_to_int(active_from)
+                    assert _type(active_from) is int
+            else:
+                active_from = int(time.time())
+            if expires_at is not None:
+                expires_at = try_convert_to_int(expires_at)
+                assert _type(expires_at) is int
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        # All exceptions must be raised before this point.
+        super().__init__()
+
+        self.country = country.upper()
+        self.country_options = country_options or {}
+        self.active_from = active_from
+        self.expires_at = expires_at
+        self.status = status or 'active'
+        self.livemode = False
+
+    @classmethod
+    def _api_update(cls, id, expires_at=None, **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        obj = cls._api_retrieve(id)
+
+        if expires_at is not None:
+            if expires_at == 'now':
+                expires_at = int(time.time())
+            else:
+                expires_at = try_convert_to_int(expires_at)
+            obj.expires_at = expires_at
+            if expires_at <= int(time.time()):
+                obj.status = 'expired'
+
+        store[cls.object + ':' + obj.id] = obj
+        return obj
+
+
+class TaxCode:
+    """Tax codes for product categorization.
+
+    These are predefined by Stripe and don't need to be stored.
+    We provide a static list of common tax codes.
+    """
+    object = 'tax_code'
+
+    # Common tax codes from Stripe
+    CODES = {
+        'txcd_99999999': {
+            'id': 'txcd_99999999',
+            'object': 'tax_code',
+            'name': 'General - Tangible Goods',
+            'description': 'General tax code for tangible goods',
+        },
+        'txcd_10000000': {
+            'id': 'txcd_10000000',
+            'object': 'tax_code',
+            'name': 'General - Services',
+            'description': 'General tax code for services',
+        },
+        'txcd_10103000': {
+            'id': 'txcd_10103000',
+            'object': 'tax_code',
+            'name': 'Software as a Service (SaaS)',
+            'description': 'Software provided as a hosted service',
+        },
+        'txcd_10103001': {
+            'id': 'txcd_10103001',
+            'object': 'tax_code',
+            'name': 'Software - Business Use',
+            'description': 'Software for business use',
+        },
+        'txcd_10103002': {
+            'id': 'txcd_10103002',
+            'object': 'tax_code',
+            'name': 'Software - Personal Use',
+            'description': 'Software for personal use',
+        },
+        'txcd_10201000': {
+            'id': 'txcd_10201000',
+            'object': 'tax_code',
+            'name': 'Infrastructure as a Service (IaaS)',
+            'description': 'Cloud computing infrastructure',
+        },
+        'txcd_10202000': {
+            'id': 'txcd_10202000',
+            'object': 'tax_code',
+            'name': 'Platform as a Service (PaaS)',
+            'description': 'Cloud computing platform',
+        },
+        'txcd_20010000': {
+            'id': 'txcd_20010000',
+            'object': 'tax_code',
+            'name': 'Clothing and Apparel',
+            'description': 'Clothing and apparel items',
+        },
+        'txcd_30011000': {
+            'id': 'txcd_30011000',
+            'object': 'tax_code',
+            'name': 'Food for Human Consumption',
+            'description': 'Food and grocery items',
+        },
+        'txcd_34021000': {
+            'id': 'txcd_34021000',
+            'object': 'tax_code',
+            'name': 'Digital Goods - Streaming',
+            'description': 'Digital streaming services',
+        },
+        'txcd_35010000': {
+            'id': 'txcd_35010000',
+            'object': 'tax_code',
+            'name': 'Electronic Books',
+            'description': 'E-books and digital publications',
+        },
+    }
+
+    @classmethod
+    def _api_retrieve(cls, id):
+        if id not in cls.CODES:
+            raise UserError(404, 'Tax code not found')
+        return cls.CODES[id]
+
+    @classmethod
+    def _api_list_all(cls, **kwargs):
+        return {
+            'object': 'list',
+            'data': list(cls.CODES.values()),
+            'has_more': False,
+            'url': '/v1/tax_codes',
+        }
+
+
+class TaxCalculationLineItem:
+    """Line item for tax calculation - not stored separately."""
+    object = 'tax.calculation_line_item'
+
+    def __init__(
+        self,
+        amount=None,
+        quantity=None,
+        reference=None,
+        tax_code=None,
+        tax_behavior=None,
+        product=None,
+    ):
+        self.id = 'tax_li_' + random_id(14)
+        self.object = 'tax.calculation_line_item'
+        self.amount = amount
+        self.amount_tax = 0  # Calculated
+        self.livemode = False
+        self.product = product
+        self.quantity = quantity or 1
+        self.reference = reference
+        self.tax_behavior = tax_behavior or 'exclusive'
+        self.tax_code = tax_code or 'txcd_99999999'
+        self.tax_breakdown = []
+
+
+class TaxCalculation(StripeObject):
+    object = 'tax.calculation'
+    _id_prefix = 'taxcalc_'
+
+    def __init__(
+        self,
+        currency=None,
+        line_items=None,
+        customer=None,
+        customer_details=None,
+        shipping_cost=None,
+        tax_date=None,
+        **kwargs,
+    ):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        try:
+            assert _type(currency) is str and len(currency) == 3
+            assert line_items is not None and _type(line_items) is list
+            assert len(line_items) > 0
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        # All exceptions must be raised before this point.
+        super().__init__()
+
+        self.currency = currency.lower()
+        self.customer = customer
+        self.livemode = False
+        self.tax_date = tax_date or int(time.time())
+        self.expires_at = int(time.time()) + 7200  # 2 hours
+
+        # Process customer details
+        if customer_details is not None:
+            self.customer_details = customer_details
+        elif customer is not None:
+            cust = Customer._api_retrieve(customer)
+            self.customer_details = {
+                'address': cust.address,
+                'address_source': 'billing',
+                'ip_address': None,
+                'tax_ids': [],
+                'taxability_override': 'none',
+            }
+        else:
+            self.customer_details = {
+                'address': None,
+                'address_source': None,
+                'ip_address': None,
+                'tax_ids': [],
+                'taxability_override': 'none',
+            }
+
+        # Process line items and calculate tax
+        self._line_items = []
+        self.amount_total = 0
+        self.tax_amount_exclusive = 0
+        self.tax_amount_inclusive = 0
+
+        for li_data in line_items:
+            amount = try_convert_to_int(li_data.get('amount', 0))
+            quantity = try_convert_to_int(li_data.get('quantity', 1))
+            tax_behavior = li_data.get('tax_behavior', 'exclusive')
+            tax_code = li_data.get('tax_code', 'txcd_99999999')
+
+            li = TaxCalculationLineItem(
+                amount=amount,
+                quantity=quantity,
+                reference=li_data.get('reference'),
+                tax_code=tax_code,
+                tax_behavior=tax_behavior,
+                product=li_data.get('product'),
+            )
+
+            # Simple tax calculation - 10% default rate for testing
+            tax_rate = 0.10
+            if tax_behavior == 'inclusive':
+                li.amount_tax = int(amount - (amount / (1 + tax_rate)))
+                self.tax_amount_inclusive += li.amount_tax
+            else:
+                li.amount_tax = int(amount * tax_rate)
+                self.tax_amount_exclusive += li.amount_tax
+
+            li.tax_breakdown = [{
+                'amount': li.amount_tax,
+                'inclusive': tax_behavior == 'inclusive',
+                'tax_rate_details': {
+                    'country': 'US',
+                    'percentage_decimal': '10.0',
+                    'state': None,
+                    'tax_type': 'sales_tax',
+                },
+                'taxability_reason': 'standard_rated',
+                'taxable_amount': amount,
+            }]
+
+            self._line_items.append(li)
+            self.amount_total += amount
+
+        # Add exclusive tax to total
+        self.amount_total += self.tax_amount_exclusive
+
+        # Handle shipping cost
+        self.shipping_cost = None
+        if shipping_cost is not None:
+            ship_amount = try_convert_to_int(shipping_cost.get('amount', 0))
+            ship_tax = int(ship_amount * 0.10)
+            self.shipping_cost = {
+                'amount': ship_amount,
+                'amount_tax': ship_tax,
+                'shipping_rate': shipping_cost.get('shipping_rate'),
+                'tax_behavior': shipping_cost.get('tax_behavior', 'exclusive'),
+                'tax_breakdown': [{
+                    'amount': ship_tax,
+                    'inclusive': False,
+                    'tax_rate_details': {
+                        'country': 'US',
+                        'percentage_decimal': '10.0',
+                        'tax_type': 'sales_tax',
+                    },
+                    'taxability_reason': 'standard_rated',
+                    'taxable_amount': ship_amount,
+                }],
+                'tax_code': 'txcd_92010001',
+            }
+            self.amount_total += ship_amount + ship_tax
+            self.tax_amount_exclusive += ship_tax
+
+        self.tax_breakdown = [{
+            'amount': self.tax_amount_exclusive + self.tax_amount_inclusive,
+            'inclusive': False,
+            'tax_rate_details': {
+                'country': 'US',
+                'percentage_decimal': '10.0',
+                'state': None,
+                'tax_type': 'sales_tax',
+            },
+            'taxability_reason': 'standard_rated',
+            'taxable_amount': self.amount_total - self.tax_amount_exclusive,
+        }]
+
+    @classmethod
+    def _api_create(cls, **data):
+        return cls(**data)
+
+    @classmethod
+    def _api_list_line_items(cls, calculation, limit=None, starting_after=None,
+                              **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        obj = cls._api_retrieve(calculation)
+
+        return {
+            'object': 'list',
+            'data': [
+                {
+                    'id': li.id,
+                    'object': li.object,
+                    'amount': li.amount,
+                    'amount_tax': li.amount_tax,
+                    'livemode': li.livemode,
+                    'product': li.product,
+                    'quantity': li.quantity,
+                    'reference': li.reference,
+                    'tax_behavior': li.tax_behavior,
+                    'tax_breakdown': li.tax_breakdown,
+                    'tax_code': li.tax_code,
+                }
+                for li in obj._line_items
+            ],
+            'has_more': False,
+            'url': f'/v1/tax/calculations/{calculation}/line_items',
+        }
+
+
+class TaxTransaction(StripeObject):
+    object = 'tax.transaction'
+    _id_prefix = 'tax_txn_'
+
+    def __init__(
+        self,
+        reference=None,
+        mode=None,
+        type=None,
+        currency=None,
+        customer=None,
+        customer_details=None,
+        line_items=None,
+        shipping_cost=None,
+        tax_date=None,
+        metadata=None,
+        **kwargs,
+    ):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        try:
+            assert reference is not None and _type(reference) is str
+            assert mode in ('destination', 'origin')
+            assert _type(currency) is str and len(currency) == 3
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        # All exceptions must be raised before this point.
+        super().__init__()
+
+        self.reference = reference
+        self.mode = mode
+        self.type = type or 'transaction'
+        self.currency = currency.lower()
+        self.customer = customer
+        self.customer_details = customer_details or {}
+        self.livemode = False
+        self.metadata = metadata or {}
+        self.tax_date = tax_date or int(time.time())
+        self.shipping_cost = shipping_cost
+
+        # Process line items
+        self._line_items = line_items or []
+        self.amount_total = 0
+        self.tax_amount_exclusive = 0
+        self.tax_amount_inclusive = 0
+
+        for li in self._line_items:
+            amount = li.get('amount', 0)
+            amount_tax = li.get('amount_tax', 0)
+            tax_behavior = li.get('tax_behavior', 'exclusive')
+
+            self.amount_total += amount
+            if tax_behavior == 'inclusive':
+                self.tax_amount_inclusive += amount_tax
+            else:
+                self.tax_amount_exclusive += amount_tax
+                self.amount_total += amount_tax
+
+        # Reversal tracking
+        self.reversal = None
+
+    @classmethod
+    def _api_create_from_calculation(cls, calculation=None, reference=None,
+                                      metadata=None, **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        try:
+            assert calculation is not None
+            assert reference is not None
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        calc = TaxCalculation._api_retrieve(calculation)
+
+        line_items = []
+        for li in calc._line_items:
+            line_items.append({
+                'amount': li.amount,
+                'amount_tax': li.amount_tax,
+                'reference': li.reference,
+                'tax_behavior': li.tax_behavior,
+                'tax_code': li.tax_code,
+                'product': li.product,
+                'quantity': li.quantity,
+            })
+
+        return cls(
+            reference=reference,
+            mode='destination',
+            type='transaction',
+            currency=calc.currency,
+            customer=calc.customer,
+            customer_details=calc.customer_details,
+            line_items=line_items,
+            shipping_cost=calc.shipping_cost,
+            tax_date=calc.tax_date,
+            metadata=metadata,
+        )
+
+    @classmethod
+    def _api_create_reversal(cls, mode=None, original_transaction=None,
+                              reference=None, flat_amount=None,
+                              line_items=None, shipping_cost=None,
+                              metadata=None, **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        try:
+            assert mode in ('full', 'partial')
+            assert original_transaction is not None
+            assert reference is not None
+        except AssertionError:
+            raise UserError(400, 'Bad request')
+
+        original = cls._api_retrieve(original_transaction)
+
+        if mode == 'full':
+            # Full reversal
+            reversed_items = []
+            for li in original._line_items:
+                reversed_items.append({
+                    **li,
+                    'amount': -li['amount'],
+                    'amount_tax': -li.get('amount_tax', 0),
+                })
+
+            reversal = cls(
+                reference=reference,
+                mode=original.mode,
+                type='reversal',
+                currency=original.currency,
+                customer=original.customer,
+                customer_details=original.customer_details,
+                line_items=reversed_items,
+                metadata=metadata,
+            )
+        else:
+            # Partial reversal
+            if flat_amount is not None:
+                flat_amount = try_convert_to_int(flat_amount)
+                tax_amount = int(flat_amount * 0.10)
+                reversed_items = [{
+                    'amount': -flat_amount,
+                    'amount_tax': -tax_amount,
+                    'reference': 'partial_refund',
+                    'tax_behavior': 'exclusive',
+                }]
+            elif line_items is not None:
+                reversed_items = line_items
+            else:
+                raise UserError(400, 'Must specify flat_amount or line_items')
+
+            reversal = cls(
+                reference=reference,
+                mode=original.mode,
+                type='reversal',
+                currency=original.currency,
+                customer=original.customer,
+                customer_details=original.customer_details,
+                line_items=reversed_items,
+                shipping_cost=shipping_cost,
+                metadata=metadata,
+            )
+
+        reversal.reversal = {
+            'original_transaction': original.id,
+        }
+
+        return reversal
+
+    @classmethod
+    def _api_list_line_items(cls, transaction, limit=None, starting_after=None,
+                              **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        obj = cls._api_retrieve(transaction)
+
+        return {
+            'object': 'list',
+            'data': [
+                {
+                    'id': 'tax_li_' + random_id(14),
+                    'object': 'tax.transaction_line_item',
+                    **li,
+                }
+                for li in obj._line_items
+            ],
+            'has_more': False,
+            'url': f'/v1/tax/transactions/{transaction}/line_items',
         }
 
 
